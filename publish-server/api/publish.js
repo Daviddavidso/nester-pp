@@ -1,17 +1,17 @@
 /* ==========================================================================
-   ПУБЛИКАЦИЯ КАТАЛОГА «ВЫБОР» (choice7.ru) ИЗ АДМИНКИ.
+   ПУБЛИКАЦИЯ КАТАЛОГА «ФИНВЫБОР» (maeb-fin.ru) ИЗ АДМИНКИ.
 
    Живёт на Vercel. Сайт — статика на GitHub Pages, поэтому «Сохранить
    на сайт» работает так: функция проверяет пароль админки, выдаёт токен
    на 30 дней и по команде публикации коммитит data.js прямо в репозиторий
-   Daviddavidso/vybor — GitHub Pages пересобирает сайт за минуту-другую.
+   Daviddavidso/nester-pp — GitHub Pages пересобирает сайт за минуту-другую.
 
    Секретов в коде нет:
    — эталон пароля — файл .admin-pass в публичном репозитории
      (sha256 от соли и пароля, сам пароль из него не восстановить);
    — ключ подписи токенов выводится из GH_TOKEN;
    — GH_TOKEN лежит в Environment Variables проекта: fine-grained personal
-     access token с доступом ТОЛЬКО к репозиторию Daviddavidso/vybor
+     access token с доступом ТОЛЬКО к репозиторию Daviddavidso/nester-pp
      и правом Contents: Read and write. Пока переменной нет, вход работает,
      а сохранение вежливо отказывает — ничего не ломается.
 
@@ -24,10 +24,10 @@
 
 const crypto = require('crypto');
 
-const REPO   = 'Daviddavidso/vybor';
+const REPO   = 'Daviddavidso/nester-pp';
 const BRANCH = 'main';
 const FILE   = 'data.js';
-const SALT   = 'vybor-v1-b955b1';
+const SALT   = 'maeb-v1-3c36f8';
 
 const LIFETIME  = 30 * 24 * 60 * 60 * 1000; // 30 дней — как было у api.php
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -36,11 +36,13 @@ const MAX_BYTES = 8 * 1024 * 1024;
 const NEEDLES = ['const OFFERS', 'const BRAND'];
 
 const ORIGINS = [
-  'https://choice7.ru',
-  'https://www.choice7.ru',
+  'https://maeb-fin.ru',
+  'https://www.maeb-fin.ru',
+  'http://maeb-fin.ru',
+  'http://www.maeb-fin.ru',
   'https://daviddavidso.github.io',
-  'http://localhost:4472',
-  'http://127.0.0.1:4472'
+  'http://localhost:4700',
+  'http://127.0.0.1:4700'
 ];
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -49,7 +51,7 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
    которого нет ни в коде, ни в репозитории. До настройки переменной публикация
    всё равно выключена, так что слабый запасной ключ ничем не рискует. */
 function signKey() {
-  return sha('vybor-sign:' + (process.env.GH_TOKEN || 'unconfigured'));
+  return sha('maeb-sign:' + (process.env.GH_TOKEN || 'unconfigured'));
 }
 const hmac = (s) => crypto.createHmac('sha256', signKey()).update(s).digest('hex');
 
@@ -58,7 +60,7 @@ let passCache = { value: '', at: 0 };
 async function passHash() {
   if (passCache.value && Date.now() - passCache.at < 10 * 60 * 1000) return passCache.value;
   const r = await fetch('https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/.admin-pass',
-    { headers: { 'User-Agent': 'vybor-publish' } });
+    { headers: { 'User-Agent': 'maeb-publish' } });
   if (!r.ok) throw new Error('Не удалось прочитать эталон пароля (' + r.status + ').');
   const v = (await r.text()).trim();
   if (!/^[0-9a-f]{64}$/.test(v)) throw new Error('Эталон пароля повреждён.');
@@ -93,7 +95,7 @@ async function passOk(p) {
 function gh(path, init) {
   const headers = Object.assign({
     'Accept': 'application/vnd.github+json',
-    'User-Agent': 'vybor-publish',
+    'User-Agent': 'maeb-publish',
     'X-GitHub-Api-Version': '2022-11-28'
   }, (init && init.headers) || {});
   if (process.env.GH_TOKEN) headers['Authorization'] = 'Bearer ' + process.env.GH_TOKEN;
