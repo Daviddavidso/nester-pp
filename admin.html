@@ -35,7 +35,7 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
 #login-gate .hint{ display:block; margin:6px 0 0; color:#9c9ca8; font-size:12.5px; line-height:1.45; }
 .login-alert{ margin:0 0 14px; padding:10px 12px; border-radius:10px; background:#3a1116;
   border:1px solid #ff5a6a; color:#ffd9dd; font-size:13.5px; line-height:1.4; }
-.login-alert:empty{ display:none; }
+.login-alert:empty{ padding:0; margin:0; border:0; }
 #login-gate .glass--block{ width:100%; justify-content:center; }
 .admin-logout{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer;
   text-decoration:underline; text-underline-offset:3px; }
@@ -404,13 +404,82 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
   var PASS_SHA  = "5b8f6d3adc260c6b7330983d79f74ae19fc546f62c52781be9026fb2a9eaa76f";
   var SESSION   = "maeb:auth";
 
+  /* Своя sha256, без встроенной криптографии браузера. Она нужна потому,
+     что crypto.subtle работает только на https, а домен пока открывается
+     по http — и вход в панель просто не состоялся бы. Проверено на
+     контрольных векторах, включая кириллицу. */
+  function sha256Hex(str) {
+    var K = [
+      0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+      0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+      0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+      0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+      0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+      0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+      0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+      0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+
+    var bytes = [], i, c;
+    for (i = 0; i < str.length; i++) {
+      c = str.charCodeAt(i);
+      if (c < 0x80) bytes.push(c);
+      else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+      else if (c < 0xd800 || c >= 0xe000) bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+      else {
+        i++;
+        var cp = 0x10000 + (((c & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
+        bytes.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+      }
+    }
+
+    var bitLen = bytes.length * 8;
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) bytes.push(0);
+    bytes.push(0, 0, 0, 0,
+      (bitLen >>> 24) & 255, (bitLen >>> 16) & 255, (bitLen >>> 8) & 255, bitLen & 255);
+
+    function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+
+    var w = new Array(64), a, b, cc, d, e, f, g, h, t1, t2, j, off;
+    for (off = 0; off < bytes.length; off += 64) {
+      for (j = 0; j < 16; j++) {
+        w[j] = (bytes[off + j * 4] << 24) | (bytes[off + j * 4 + 1] << 16) |
+               (bytes[off + j * 4 + 2] << 8) | bytes[off + j * 4 + 3];
+      }
+      for (j = 16; j < 64; j++) {
+        var s0 = rr(w[j - 15], 7) ^ rr(w[j - 15], 18) ^ (w[j - 15] >>> 3);
+        var s1 = rr(w[j - 2], 17) ^ rr(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+        w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
+      }
+      a = H[0]; b = H[1]; cc = H[2]; d = H[3]; e = H[4]; f = H[5]; g = H[6]; h = H[7];
+      for (j = 0; j < 64; j++) {
+        t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[j] + w[j]) | 0;
+        t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & cc) ^ (b & cc))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = cc; cc = b; b = a; a = (t1 + t2) | 0;
+      }
+      H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + cc) | 0; H[3] = (H[3] + d) | 0;
+      H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+    }
+
+    var hex = "";
+    for (i = 0; i < 8; i++) hex += ("00000000" + (H[i] >>> 0).toString(16)).slice(-8);
+    return hex;
+  }
+
   function checkPass(value) {
-    var bytes = new TextEncoder().encode(SALT + value);
-    return crypto.subtle.digest("SHA-256", bytes).then(function (buf) {
-      var hex = "";
-      new Uint8Array(buf).forEach(function (b) { hex += (b < 16 ? "0" : "") + b.toString(16); });
-      return hex === PASS_SHA;
-    });
+    var target = SALT + value;
+    /* На https считает сам браузер, на http — наша функция выше. */
+    if (window.crypto && crypto.subtle && crypto.subtle.digest && window.TextEncoder) {
+      try {
+        return crypto.subtle.digest("SHA-256", new TextEncoder().encode(target)).then(function (buf) {
+          var hex = "";
+          new Uint8Array(buf).forEach(function (b) { hex += (b < 16 ? "0" : "") + b.toString(16); });
+          return hex === PASS_SHA;
+        }, function () { return sha256Hex(target) === PASS_SHA; });
+      } catch (e) { /* ниже посчитаем сами */ }
+    }
+    return Promise.resolve(sha256Hex(target) === PASS_SHA);
   }
 
   var body   = document.body;
@@ -440,14 +509,20 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
   function showError(msg) {
     pwd.setAttribute("aria-invalid", "true");
     pwd.setAttribute("aria-describedby", "login-hint login-alert");
-    box.textContent = "";                 /* сброс, чтобы одинаковая ошибка объявилась повторно */
-    requestAnimationFrame(function () { box.textContent = msg; });
+    /* Текст ставим до перевода фокуса: переход фокуса сбрасывает очередь
+       вежливых объявлений, и сообщение пропадало бы неуслышанным. */
+    box.textContent = "";
+    box.textContent = msg;
     pwd.focus();
     pwd.select();
   }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
+    if (!pwd.value) {
+      showError("Введите пароль — поле пустое.");
+      return;
+    }
     checkPass(pwd.value).then(function (ok) {
       if (ok) {
         try { sessionStorage.setItem(SESSION, "1"); } catch (err) {}
@@ -459,7 +534,7 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
       }
     }).catch(function () {
       /* crypto.subtle нет только вне https — например, если файл открыли с диска. */
-      showError("Не получилось проверить пароль в этом браузере. Откройте админку по адресу maeb-fin.ru/admin.html.");
+      showError("Не получилось проверить пароль. Обновите страницу и попробуйте ещё раз.");
     });
   });
 
