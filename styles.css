@@ -1,305 +1,1081 @@
-/* ===== Design tokens (contrast-verified — see report) ===== */
+/* =========================================================================
+   ФинВыбор (maeb-fin.ru) — оформление.
+
+   Тема тёмная, акцент красный. Про контраст: ярко-красный #FF2D2D на чёрном
+   даёт 5.3:1 и годится для крупного текста, НО белый текст на такой заливке
+   даёт всего 3.7:1 — это провал по WCAG AA. Поэтому у нас два разных красных:
+     --accent      — свет, рамки, свечение, крупные акценты (не мелкий текст);
+     --accent-fill — заливка кнопок, по ней идёт белый текст (5.7:1);
+     --accent-text — мелкий красный текст и ссылки (7:1).
+   Не заменяйте одно другим «на глаз» — сломается читаемость.
+   ========================================================================= */
+
 :root {
-  color-scheme: dark;
+  --bg:          #08080A;
+  --bg-soft:     #0D0D11;
+  --card:        #0F0F13;
+  --card-hi:     #15151B;
 
-  /* Surfaces */
-  --bg: #15130F;          /* page background */
-  --bg-card: #211C15;     /* card surface */
-  --card-border: #786646; /* 3.35:1 vs --bg, 3.05:1 vs --bg-card */
+  --text:        #FFFFFF;
+  --muted:       #9A9AA6;   /* 6.5:1 на фоне — минимум для мелкого текста */
+  --dim:         #8F8F9C;   /* 6.3:1 — им набрана строка «Реклама. erid» */
 
-  /* Text */
-  --text: #F2EFEA;        /* 16.18:1 on --bg */
-  --text-muted: #A79C8C;  /* 6.87:1 on --bg, 6.26:1 on --bg-card */
+  --accent:      #FF2D2D;
+  --accent-fill: #C81022;
+  --accent-text: #FF6B6B;
+  --accent-deep: #7A0A14;
 
-  /* Accent (warm bronze/gold — deliberately not the generic SaaS blue/lime) */
-  --accent: #996524;      /* 3.75:1 vs --bg, 3.42:1 vs --bg-card */
-  --accent-hover: #7d5320;
-  --accent-text: #FFFFFF; /* 4.95:1 on --accent */
-  --link: #E3B152;        /* 9.43:1 on --bg — must stay underlined, see .offer-terms note below */
+  /* Стекло. Рамка не ниже 0.40 — иначе кнопку не видно как кнопку. */
+  --glass-line:  rgba(255, 255, 255, .40);
+  --glass-line-soft: rgba(255, 255, 255, .12);
+  --glass-body:  rgba(22, 22, 28, .55);
 
-  /* Focus */
-  --focus-ring: #FFFFFF;  /* 18.55:1 on --bg, 16.91:1 on --bg-card, 4.95:1 on --accent */
+  --radius:      22px;
+  --shell:       1220px;
+  --header-h:    72px;
 
-  --radius: 12px;
-  --container-width: 1120px;
+  --ease:        cubic-bezier(.22, .61, .36, 1);
 }
 
-/* ===== Reset ===== */
+/* ------------------------------------------------------------------ БАЗА */
+
 *, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+
+html {
+  scroll-behavior: smooth;
+  /* Липкая шапка не должна накрывать якорь и элемент в фокусе */
+  scroll-padding-top: calc(var(--header-h) + 24px);
+}
+
+/* Под шапкой липнет ещё и панель фильтров (~74px). Без этого запаса
+   кнопка «Заказать карту», на которую перешли табом, останавливалась
+   ровно под панелью — вместе с рамкой фокуса. Ниже 720px панель
+   обычная, и запас не нужен. */
+@media (min-width: 721px) {
+  html { scroll-padding-top: calc(var(--header-h) + 74px + 24px); }
+}
+
 body {
+  margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  line-height: 1.5;
+  font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
-img { max-width: 100%; display: block; }
-ul { margin: 0; }
-fieldset { border: 0; padding: 0; margin: 0; }
 
-/* ===== Utilities ===== */
+h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+
+a { color: inherit; }
+
+img { max-width: 100%; display: block; }
+
+:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.shell {
+  width: 100%;
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 clamp(18px, 4vw, 40px);
+}
+.shell--narrow { max-width: 860px; }
+
 .visually-hidden {
-  position: absolute;
+  position: absolute !important;
   width: 1px; height: 1px;
-  padding: 0; margin: -1px;
+  margin: -1px; padding: 0;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
 
-.container {
-  max-width: var(--container-width);
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-/* ===== Focus indicator (visible on every interactive element) ===== */
-:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-a, button, input { outline: none; } /* removed only to be replaced by :focus-visible above */
-
-/* ===== Skip link ===== */
 .skip-link {
   position: absolute;
-  top: -3rem;
-  left: 1rem;
-  background: var(--accent);
-  color: var(--accent-text);
-  padding: 0.75rem 1.25rem;
-  border-radius: 0 0 8px 8px;
-  text-decoration: none;
+  left: 16px; top: -100px;
+  z-index: 200;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: #08080A;
   font-weight: 600;
-  z-index: 100;
-  transition: top 0.15s ease;
+  text-decoration: none;
+  transition: top .18s var(--ease);
 }
-.skip-link:focus {
-  top: 0;
+/* Появляется НИЖЕ липкой шапки, а не под ней */
+.skip-link:focus { top: calc(var(--header-h) + 12px); }
+
+/* --------------------------------------------------------------- ФОН */
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
 }
 
-/* ===== Header ===== */
-.site-header {
-  border-bottom: 1px solid var(--card-border);
+.bg__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: .5;
 }
-.header-inner {
+.bg__glow--one {
+  width: 780px; height: 780px;
+  top: -340px; left: 50%;
+  transform: translateX(-55%);
+  background: radial-gradient(circle, rgba(255, 45, 45, .55), rgba(255, 45, 45, 0) 68%);
+}
+.bg__glow--two {
+  width: 620px; height: 620px;
+  top: 42%; right: -220px;
+  background: radial-gradient(circle, rgba(122, 10, 20, .55), rgba(122, 10, 20, 0) 70%);
+  opacity: .55;
+}
+
+.bg__grid {
+  position: absolute;
+  inset: 0;
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 clamp(18px, 4vw, 40px);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+.bg__grid span {
+  border-left: 1px solid rgba(255, 255, 255, .035);
+}
+.bg__grid span:first-child { border-left: 0; }
+
+.bg__noise {
+  position: absolute;
+  inset: 0;
+  opacity: .045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ================================================================ СТЕКЛО
+   Главный элемент дизайна — кнопка-пилюля «liquid glass»: корпус из
+   полупрозрачного стекла, белый блик по верхней кромке и цветной разлив
+   света под кнопкой. Разлив лежит на отдельном слое ::after, поэтому у
+   контейнеров с кнопками стоит isolation: isolate — иначе он уедет под фон.
+   ---------------------------------------------------------------------- */
+
+.glass {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 14px 28px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .20) 0%,
+      rgba(255, 255, 255, .05) 38%,
+      rgba(255, 255, 255, .02) 62%,
+      rgba(255, 255, 255, .12) 100%),
+    var(--glass-body);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, .72),
+    inset 0 -12px 26px rgba(255, 255, 255, .06),
+    inset 0 0 30px rgba(255, 255, 255, .05),
+    0 14px 34px -14px rgba(0, 0, 0, .95);
+  transition: transform .28s var(--ease), box-shadow .28s var(--ease), border-color .28s var(--ease);
+}
+
+/* Блик по верхней кромке — то, что делает стекло стеклом */
+.glass::before {
+  content: '';
+  position: absolute;
+  left: 7%; right: 7%; top: 2px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0));
+  filter: blur(4px);
+  opacity: .55;
+  pointer-events: none;
+}
+
+/* Разлив цвета под кнопкой */
+.glass::after {
+  content: '';
+  position: absolute;
+  left: 8%; right: 8%; bottom: -16px;
+  height: 30px;
+  z-index: -1;
+  border-radius: 999px;
+  background: var(--spill, rgba(255, 255, 255, .5));
+  filter: blur(20px);
+  opacity: .5;
+  pointer-events: none;
+  transition: opacity .3s var(--ease), filter .3s var(--ease);
+}
+
+.glass:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, .55);
+}
+.glass:hover::after { opacity: .85; filter: blur(26px); }
+.glass:active { transform: translateY(0); }
+
+/* Фокус на стекле: белое кольцо + тёмное внутреннее.
+   На красной заливке одного белого мало — контраст падает до 3.7:1. */
+.glass:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 2px #08080A,
+    inset 0 1.5px 0 rgba(255, 255, 255, .72),
+    0 14px 34px -14px rgba(0, 0, 0, .95);
+}
+
+.glass__label { position: relative; z-index: 1; }
+.glass__arrow { width: 16px; height: 16px; position: relative; z-index: 1; }
+
+.glass--sm { min-height: 44px; padding: 10px 20px; font-size: 15px; }
+
+/* Красная стеклянная кнопка. Заливка тёмно-красная — по ней идёт белый
+   текст. Ярко-красный оставлен свету и рамке. */
+.glass--accent {
+  --spill: var(--accent);
+  border-color: rgba(255, 255, 255, .45);
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .26) 0%,
+      rgba(255, 255, 255, .06) 34%,
+      rgba(255, 45, 45, .18) 58%,
+      rgba(255, 255, 255, .14) 100%),
+    linear-gradient(180deg, #E4142A 0%, var(--accent-fill) 55%, #96101F 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, .8),
+    inset 0 -14px 28px rgba(255, 255, 255, .1),
+    0 16px 40px -16px rgba(255, 45, 45, .8);
+}
+.glass--accent::after { opacity: .7; }
+
+/* ------------------------------------------------------------- ШАПКА */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  min-height: var(--header-h);
+  display: flex;
+  align-items: center;
+  background: rgba(8, 8, 10, .72);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+.header__inner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.header__cta { margin-left: auto; }
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  text-decoration: none;
+  flex: none;
+}
+.brand__mark {
+  width: 34px; height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(160deg, #FF3B3B, var(--accent-fill));
+  box-shadow: 0 6px 18px -6px rgba(255, 45, 45, .9), inset 0 1px 0 rgba(255, 255, 255, .5);
+  font-weight: 700;
+  font-size: 17px;
+  color: #FFFFFF;
+}
+.brand__name {
+  font-weight: 600;
+  letter-spacing: .14em;
+  font-size: 15px;
+}
+
+.nav { margin-left: 12px; }
+.nav__list {
+  display: flex;
+  gap: 4px;
+}
+.nav__list a {
+  display: inline-block;
+  padding: 9px 14px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 15px;
+  text-decoration: none;
+  transition: color .2s var(--ease), background-color .2s var(--ease);
+}
+.nav__list a:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
+
+/* ------------------------------------------------------- ПЕРВЫЙ ЭКРАН */
+
+.hero {
+  padding: clamp(64px, 11vw, 132px) 0 clamp(48px, 7vw, 84px);
+  text-align: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px 9px 14px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  font-size: 14px;
+  color: #E6E6EC;
+}
+.badge__dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(255, 45, 45, .18), 0 0 14px 2px rgba(255, 45, 45, .9);
+}
+
+.hero__title {
+  margin: 26px auto 0;
+  max-width: 15ch;
+  font-size: clamp(40px, 7.6vw, 92px);
+  line-height: 1.02;
+  letter-spacing: -.035em;
+  font-weight: 600;
+  background: linear-gradient(178deg, #FFFFFF 42%, #C9C9D4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero__subtitle {
+  margin: 26px auto 0;
+  max-width: 34ch;
+  font-size: clamp(19px, 2.4vw, 26px);
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+
+.hero__lead {
+  margin: 16px auto 0;
+  max-width: 66ch;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.hero__actions {
+  isolation: isolate;
+  margin-top: 38px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.stats {
+  margin: clamp(54px, 8vw, 88px) auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.stats li {
+  padding: 22px 18px;
+  background: var(--bg);
+  text-align: center;
+}
+.stats__value {
+  display: block;
+  font-size: clamp(24px, 3.4vw, 34px);
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.stats__label {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ----------------------------------------------------- БЕГУЩАЯ СТРОКА */
+
+.ticker { padding: 8px 0 34px; }
+
+.ticker__box {
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, .07);
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  padding: 16px 0;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.ticker__track {
+  display: flex;
+  gap: 46px;
+  width: max-content;
+  animation: ticker 46s linear infinite;
+}
+.ticker__track[data-paused='true'] { animation-play-state: paused; }
+.ticker__item {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 13px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #8F8F9C;
+  white-space: nowrap;
+}
+@keyframes ticker { to { transform: translateX(-50%); } }
+
+.ticker__foot { margin-top: 12px; text-align: center; }
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  min-height: 24px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.link-btn:hover { color: var(--text); }
+
+/* ------------------------------------------------------------ СЕКЦИИ */
+
+.section { padding: clamp(56px, 8vw, 104px) 0; }
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow span {
+  color: var(--accent-text);
+}
+
+.section__title {
+  margin-top: 14px;
+  font-size: clamp(30px, 4.6vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -.03em;
+  font-weight: 600;
+}
+.section__lead {
+  margin-top: 14px;
+  max-width: 62ch;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------ ФИЛЬТРЫ */
+
+.filters {
+  isolation: isolate;
+  margin-top: 34px;
+  position: sticky;
+  top: var(--header-h);
+  z-index: 40;
+  padding: 14px 0;
+  background: linear-gradient(180deg, var(--bg) 62%, rgba(8, 8, 10, 0));
+}
+.filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filter {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 11px 22px;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .18) 0%,
+      rgba(255, 255, 255, .04) 40%,
+      rgba(255, 255, 255, .02) 64%,
+      rgba(255, 255, 255, .10) 100%),
+    var(--glass-body);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow:
+    inset 0 1.4px 0 rgba(255, 255, 255, .65),
+    inset 0 -10px 22px rgba(255, 255, 255, .05),
+    0 12px 28px -14px rgba(0, 0, 0, .9);
+  color: #E8E8EF;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform .26s var(--ease), border-color .26s var(--ease), color .26s var(--ease);
+}
+.filter::after {
+  content: '';
+  position: absolute;
+  left: 8%; right: 8%; bottom: -14px;
+  height: 26px;
+  z-index: -1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .4);
+  filter: blur(18px);
+  opacity: .28;
+  transition: opacity .3s var(--ease), background-color .3s var(--ease);
+  pointer-events: none;
+}
+.filter:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, .58); }
+.filter:hover::after { opacity: .5; }
+
+.filter__dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .35);
+  flex: none;
+  transition: background-color .26s var(--ease), box-shadow .26s var(--ease);
+}
+
+/* Активное состояние — не только цветом: жирнее текст, светлее рамка,
+   загорается точка. Иначе состояние теряется в ч/б и при дальтонизме. */
+.filter[aria-pressed='true'] {
+  color: #FFFFFF;
+  font-weight: 600;
+  border-color: rgba(255, 255, 255, .68);
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, .28) 0%,
+      rgba(255, 255, 255, .08) 34%,
+      rgba(255, 45, 45, .22) 60%,
+      rgba(255, 255, 255, .16) 100%),
+    linear-gradient(180deg, #C81022 0%, var(--accent-fill) 58%, #8E0F1D 100%);
+  box-shadow:
+    inset 0 1.6px 0 rgba(255, 255, 255, .85),
+    inset 0 -14px 26px rgba(255, 255, 255, .12),
+    0 16px 36px -16px rgba(255, 45, 45, .85);
+}
+.filter[aria-pressed='true']::after {
+  background: var(--accent);
+  opacity: .8;
+}
+.filter[aria-pressed='true'] .filter__dot {
+  background: #FFFFFF;
+  box-shadow: 0 0 10px 1px rgba(255, 255, 255, .9);
+}
+
+.filter:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 2px #08080A, inset 0 1.4px 0 rgba(255, 255, 255, .65);
+}
+
+.offers__count {
+  margin-top: 6px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 12px;
+  /* Ни капса, ни широкой разрядки: этот текст теперь озвучивается при
+     смене категории, а трансформированный в CSS капс часть голосовых
+     движков читает по буквам. */
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+
+/* ----------------------------------------------------------- КАРТОЧКИ */
+
+.cards {
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015)),
+    var(--card);
+  transition: border-color .3s var(--ease), transform .3s var(--ease), box-shadow .3s var(--ease);
+}
+.card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(160deg, rgba(255, 45, 45, .6), rgba(255, 45, 45, 0) 45%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity .3s var(--ease);
+  pointer-events: none;
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, .16);
+  box-shadow: 0 26px 50px -26px rgba(255, 45, 45, .55);
+}
+.card:hover::before { opacity: 1; }
+/* Фокус на ссылке внутри поднимает всю карточку — видно, где ты находишься */
+.card:focus-within { border-color: rgba(255, 255, 255, .3); }
+
+.card__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.card__logo {
+  width: 52px; height: 52px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #FFFFFF;
+  padding: 7px;
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, .9);
+}
+.card__logo img { width: 100%; height: 100%; object-fit: contain; }
+.card__mono {
+  width: 52px; height: 52px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  font-weight: 700;
+  font-size: 19px;
+  color: #FFFFFF;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+}
+.card__partner {
+  font-size: 15px;
+  color: var(--muted);
+}
+.card__title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 1.25;
+}
+
+.card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .04);
+  font-size: 12.5px;
+  color: #D6D6DE;
+}
+.tag--hot {
+  border-color: rgba(255, 45, 45, .5);
+  background: rgba(255, 45, 45, .12);
+  color: var(--accent-text);
+}
+
+.specs { display: grid; gap: 9px; }
+/* Значение клиент пишет сам, длина любая. Оно не ужимается (flex:0 0 auto) —
+   цена всегда встаёт целиком; подпись ужимается, но не мельче своего длинного
+   слова, поэтому по буквам не рвётся. Вдвоём не влезли — строка переносится. */
+.specs > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14.5px;
+}
+.specs dt { color: var(--muted); flex: 0 1 auto; min-width: 0; overflow-wrap: break-word; }
+.specs .specs__dots {
+  flex: 1 1 16px;
+  border-bottom: 1px dotted rgba(255, 255, 255, .18);
+  transform: translateY(-3px);
+}
+.specs dd {
+  flex: 0 0 auto;
+  max-width: 100%;
+  margin-left: auto;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: break-word;
+}
+
+.card__foot {
+  isolation: isolate;
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+}
+.card__cta { width: 100%; }
+
+/* Вся плитка кликабельна мышью (см. script.js), но интерактивный элемент
+   в разметке ровно один — сама ссылка. Оборачивать карточку в <a> нельзя:
+   внутри заголовок и список характеристик. */
+.card { cursor: pointer; }
+.card__foot, .card__cta { cursor: pointer; }
+
+.card__erid {
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--dim);
+  text-align: center;
+}
+
+.empty {
+  margin-top: 34px;
+  padding: 44px 22px;
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, .16);
+  border-radius: var(--radius);
+  isolation: isolate;
+}
+.empty__text { color: var(--muted); margin-bottom: 18px; }
+
+.noscript {
+  margin-top: 26px;
+  padding: 18px;
+  border: 1px solid rgba(255, 45, 45, .4);
+  border-radius: 14px;
+  color: var(--accent-text);
+}
+
+/* --------------------------------------------------------------- ШАГИ */
+
+.steps {
+  margin-top: 38px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  counter-reset: step;
+}
+.step {
+  position: relative;
+  padding: 26px 24px 28px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01)), var(--card);
+}
+.step__num {
+  display: inline-grid;
+  place-items: center;
+  width: 42px; height: 42px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .02));
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 15px;
+  color: #FFFFFF;
+}
+.step__title { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.step__text { margin-top: 9px; color: var(--muted); font-size: 15.5px; }
+
+/* ------------------------------------------------------------ ПРИЧИНЫ */
+
+.reasons {
+  margin-top: 38px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+.reason {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.reason__mark {
+  flex: none;
+  width: 10px; height: 10px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(255, 45, 45, .16), 0 0 16px 2px rgba(255, 45, 45, .8);
+}
+.reason__title { font-size: 18px; font-weight: 600; }
+.reason__text { margin-top: 7px; color: var(--muted); font-size: 15.5px; }
+
+/* ------------------------------------------------------------- ВОПРОСЫ */
+
+.faq { margin-top: 34px; }
+
+.faq__item {
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+.faq__item:first-child { border-top: 1px solid rgba(255, 255, 255, .09); }
+
+.faq__q { margin: 0; }
+
+.faq__btn {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-  padding: 1.25rem 1.5rem;
-}
-.logo {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text);
-}
-.nav-list {
-  display: flex;
-  gap: 1.5rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  flex-wrap: wrap;
-}
-.nav-list a {
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  font-weight: 500;
-}
-.nav-list a:hover { color: var(--link); }
-
-/* ===== Generic links ===== */
-a {
-  color: var(--link);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* ===== Buttons / CTAs (visually distinct via shape+background, not color alone) ===== */
-.btn {
-  display: inline-block;
-  padding: 0.85rem 1.75rem;
-  border-radius: 999px;
-  font-weight: 600;
-  text-decoration: none;
-  border: 1px solid transparent;
-}
-.btn-primary {
-  background: var(--accent);
-  color: var(--accent-text);
-}
-.btn-primary:hover { background: var(--accent-hover); }
-
-/* ===== Hero ===== */
-.hero {
-  padding: 5rem 0 3.5rem;
-}
-.hero h1 {
-  font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1.15;
-  margin: 0 0 1.25rem;
-  max-width: 40ch;
-}
-.hero-subtext {
-  color: var(--text-muted);
-  max-width: 55ch;
-  margin: 0 0 2rem;
-  font-size: 1.1rem;
-}
-
-/* ===== Filter ===== */
-.filter-section {
-  padding: 0 0 2.5rem;
-}
-.filter-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-.filter-pill {
-  position: relative;
-  display: inline-flex;
-  cursor: pointer;
-}
-.filter-pill input {
-  position: absolute;
-  width: 1px; height: 1px;
-  padding: 0; margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+  gap: 18px;
+  padding: 22px 4px;
+  background: none;
   border: 0;
-}
-.filter-pill span {
-  display: inline-block;
-  padding: 0.6rem 1.25rem;
-  border-radius: 999px;
-  border: 1px solid var(--card-border);
-  color: var(--text-muted);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
   font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: color .2s var(--ease);
 }
-/* Selected state: never color alone — weight + border + fill all change together */
-.filter-pill input:checked + span {
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 700;
-  border-color: var(--accent);
+.faq__btn:hover { color: var(--accent-text); }
+
+.faq__icon {
+  flex: none;
+  width: 30px; height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, .05);
+  transition: transform .3s var(--ease), background-color .3s var(--ease), border-color .3s var(--ease);
 }
-.filter-pill input:focus-visible + span {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+.faq__icon svg { width: 13px; height: 13px; }
+.faq__btn[aria-expanded='true'] .faq__icon {
+  transform: rotate(45deg);
+  border-color: rgba(255, 45, 45, .6);
+  background: rgba(255, 45, 45, .18);
 }
 
-/* ===== Offers grid ===== */
-.offers-section { padding: 0 0 4rem; }
-.offers-section h2, .about-section h2 {
-  font-size: 1.75rem;
-  margin: 0 0 1.75rem;
+.faq__panel {
+  padding: 0 46px 24px 4px;
+  color: var(--muted);
 }
-.offers-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1.5rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.faq__panel[hidden] { display: none; }
+
+/* -------------------------------------------------------------- ПОДВАЛ */
+
+.footer {
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  padding: 52px 0 44px;
+  background: linear-gradient(180deg, rgba(255, 45, 45, .05), rgba(8, 8, 10, 0) 40%);
 }
-.offer-card {
-  background: var(--bg-card);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius);
-  padding: 1.5rem;
+.footer__top {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
-.offer-logo {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 8px;
-  background: var(--card-border);
-  color: var(--bg);
+.footer__nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.footer__nav a {
+  display: inline-block;
+  padding: 6px 2px;
+  min-height: 24px;
+  color: var(--muted);
+  font-size: 15px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.footer__nav a:hover { color: var(--text); }
+
+.footer__text {
+  margin-top: 22px;
+  max-width: 92ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.footer__text--dim { color: var(--dim); }
+
+.footer__bottom {
+  margin-top: 26px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.85rem;
-  margin-bottom: 0.25rem;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--dim);
 }
-.offer-category-label {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.footer__age {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  color: #D6D6DE;
+  font-weight: 600;
 }
-.offer-card h3 {
-  margin: 0;
-  font-size: 1.15rem;
-}
-.offer-product {
-  margin: 0 0 0.5rem;
-  color: var(--text-muted);
-}
-.offer-terms {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
+
+/* ------------------------------------------- ПЛАШКА ЧЕРНОВИКА АДМИНКИ */
+
+.draft-bar {
+  position: relative;
+  z-index: 120;
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-  color: var(--text-muted);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  padding: 11px clamp(18px, 4vw, 40px);
+  background: var(--accent-fill);
+  color: #FFFFFF;
+  font-size: 14px;
+  text-align: center;
 }
-.offer-cta {
-  align-self: flex-start;
-  text-decoration: none; /* button-styled link: distinguished by shape/background, not underline */
-  margin-top: auto;
+.draft-bar .link-btn { color: #FFFFFF; font-size: 14px; }
+.draft-bar .link-btn:hover { color: #FFFFFF; }
+
+/* ------------------------------------------------------------ АДАПТИВ */
+
+@media (max-width: 1000px) {
+  .nav { display: none; }
+  .steps { grid-template-columns: 1fr; }
+  .reasons { grid-template-columns: 1fr; }
 }
 
-/* ===== About ===== */
-.about-section {
-  padding: 0 0 4rem;
-  border-top: 1px solid var(--card-border);
-  padding-top: 3rem;
-}
-.about-section p {
-  max-width: 65ch;
-  color: var(--text-muted);
-}
-
-/* ===== Footer ===== */
-.site-footer {
-  border-top: 1px solid var(--card-border);
-  padding: 2.5rem 0 3rem;
-}
-.disclaimer {
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  max-width: 75ch;
-  margin: 0 0 1rem;
-}
-.copyright {
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-/* ===== Reduced motion ===== */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+@media (max-width: 720px) {
+  body { font-size: 16px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .header__cta { display: none; }
+  .brand__name { font-size: 14px; }
+  .hero { padding-top: 54px; }
+  .hero__title { max-width: none; }
+  .hero__actions .glass { width: 100%; }
+  .filters { position: static; background: none; }
+  .filters__row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 4px 0 14px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
   }
+  .filter { flex: none; scroll-snap-align: start; }
+  .cards { grid-template-columns: 1fr; }
+  .bg__grid { display: none; }
 }
 
-/* ===== Small screens ===== */
-@media (max-width: 480px) {
-  .hero { padding: 3rem 0 2.5rem; }
+/* --------------------------------------------------- РЕЖИМЫ ДОСТУПНОСТИ */
+
+/* Меньше движения */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  /* Не animation:none, а пауза: иначе кнопка «Запустить движение строки»
+     сообщала бы о состоянии, которого не может включить. */
+  .ticker__track { animation-play-state: paused; }
+  .ticker__track[data-paused='false'] { animation-play-state: running; }
 }
+
+/* Меньше прозрачности: стекло заменяется плотным фоном.
+   Без этого на таких системах кнопки сливаются с фоном. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .filter {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: #1A1A20;
+  }
+  .glass--accent, .filter[aria-pressed='true'] { background: var(--accent-fill); }
+  .glass::after, .filter::after { display: none; }
+  .header { background: #08080A; }
+}
+
+/* Повышенный контраст */
+@media (prefers-contrast: more) {
+  :root { --muted: #C8C8D2; --dim: #C0C0CA; --glass-line: rgba(255, 255, 255, .7); }
+  .card, .step, .reason { border-color: rgba(255, 255, 255, .35); }
+  .footer__nav a, .link-btn { color: #E4E4EC; }
+}
+
+/* Принудительные цвета Windows: стекло исчезает, оставляем рамки */
+@media (forced-colors: active) {
+  /* forced-color-adjust наследуется: с ним система переставала чинить
+     цвета внутри карточки, и серый текст оставался серым на белом
+     Canvas (2.8:1). Системных ключевых слов достаточно и без него. */
+  .glass, .filter, .card, .step, .reason, .badge, .tag {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .card__partner, .card__erid, .specs dt, .specs dd,
+  .step__text, .reason__text, .ticker__item, .offers__count { color: CanvasText; }
+  .card__logo { background: Canvas; border: 1px solid CanvasText; }
+  .glass::before, .glass::after, .filter::after, .card::before, .bg { display: none; }
+  /* Селектор с атрибутом весит больше, чем одиночный .filter выше:
+     без этой пары правил выбранная кнопка оставалась фирменно-красной
+     в любой теме высокой контрастности. */
+  .filter[aria-pressed='true'] {
+    background: Highlight;
+    color: HighlightText;
+    border: 3px solid CanvasText;
+  }
+  .filter__dot { background: CanvasText; }
+  .filter[aria-pressed='true'] .filter__dot { background: HighlightText; box-shadow: none; }
+  .hero__title { color: CanvasText; -webkit-text-fill-color: CanvasText; }
+}
+
+/* Предохранитель на любые тексты из админки. Клиент может написать что угодно
+   и какой угодно длины: слишком длинное слово должно переноситься, а не
+   вылезать за карточку. break-word срабатывает, только когда слово само по
+   себе не влезает в строку, поэтому цены с пробелами («до 1 000 000 ₽»)
+   остаются целыми и переносятся по пробелам. */
+body { overflow-wrap: break-word; }

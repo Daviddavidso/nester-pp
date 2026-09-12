@@ -1,304 +1,209 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ФинВыбор — сравнение кредитных карт, кредитов и займов онлайн</title>
-<link rel="stylesheet" href="styles.css">
+<title>ФинВыбор — витрина финансовых предложений: карты, деньги до зарплаты, РКО</title>
+<meta name="description" content="Дебетовые и кредитные карты, деньги до зарплаты и расчётные счета для бизнеса — собраны в одной витрине. Оформление онлайн на сайте банка или МФО.">
+
+<!-- Пока в карточках нет наименования рекламодателя и ИНН, страницу лучше
+     держать закрытой от поисковиков: erid без реквизитов — неполная
+     маркировка. Появятся реквизиты от партнёрки — удалите строку ниже. -->
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#08080A">
+<!-- Тема только тёмная: иначе при системной светлой браузер перекрашивает
+     свои же элементы — списки, автозаполнение, скроллбары -->
+<meta name="color-scheme" content="dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ФинВыбор">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="ФинВыбор — выгода начинается с правильного выбора">
+<meta property="og:description" content="Дебетовые и кредитные карты, деньги до зарплаты, РКО для бизнеса — в одной витрине.">
+
+<link rel="preload" href="fonts/gyByhwUxId8gMEwYGFWNOITddY4.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css?v=202609130001">
+<link rel="stylesheet" href="styles.css?v=202609130001">
 </head>
 <body>
-<a href="#main-content" class="skip-link">Перейти к основному содержимому</a>
 
-<header class="site-header">
-  <div class="container header-inner">
-    <p class="logo">ФинВыбор</p>
-    <nav aria-label="Основная навигация">
-      <ul class="nav-list">
-        <li><a href="#offers-heading">Карты</a></li>
-        <li><a href="#offers-heading">Кредиты</a></li>
-        <li><a href="#offers-heading">МФО</a></li>
-        <li><a href="#about-heading">О нас</a></li>
+<a class="skip-link" href="#main">Перейти к основному содержимому</a>
+
+<!-- Декорации фона. Ни одна из них ничего не значит для содержания. -->
+<div class="bg" aria-hidden="true">
+  <div class="bg__glow bg__glow--one"></div>
+  <div class="bg__glow bg__glow--two"></div>
+  <div class="bg__grid"><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="bg__noise"></div>
+</div>
+
+<header class="header">
+  <div class="shell header__inner">
+    <a class="brand" href="#main" id="brand-link">
+      <span class="brand__mark" aria-hidden="true">Ф</span>
+      <span class="brand__name" id="brand-name">ФинВыбор</span>
+    </a>
+
+    <nav class="nav" aria-label="Основная навигация">
+      <ul class="nav__list">
+        <li><a href="#offers">Офферы</a></li>
+        <li><a href="#how">Как это работает</a></li>
+        <li><a href="#why">Почему здесь</a></li>
+        <li><a href="#faq">Вопросы</a></li>
       </ul>
     </nav>
+
+    <a class="glass glass--accent glass--sm header__cta" href="#offers">
+      <span class="glass__label">Смотреть офферы</span>
+    </a>
   </div>
 </header>
 
-<main id="main-content" tabindex="-1">
+<main id="main" tabindex="-1">
 
-  <section class="hero" aria-label="Введение">
-    <div class="container">
-      <h1>Сравните лучшие финансовые предложения в одном месте</h1>
-      <p class="hero-subtext">Кредитные и дебетовые карты, кредиты наличными и займы МФО от проверенных партнёров — подберите вариант под свои условия за пару минут.</p>
-      <a href="#offers-heading" class="btn btn-primary" id="hero-cta">Смотреть предложения</a>
-    </div>
-  </section>
+  <!-- ============================== ПЕРВЫЙ ЭКРАН ============================== -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="shell">
 
-  <section class="filter-section" aria-label="Фильтр предложений">
-    <div class="container">
-      <fieldset class="filter-group">
-        <legend class="visually-hidden">Фильтр предложений по категории</legend>
-        <label class="filter-pill">
-          <input type="radio" name="offer-category" value="all" checked>
-          <span>Все</span>
-        </label>
-        <label class="filter-pill">
-          <input type="radio" name="offer-category" value="credit-cards">
-          <span>Кредитные карты</span>
-        </label>
-        <label class="filter-pill">
-          <input type="radio" name="offer-category" value="debit-cards">
-          <span>Дебетовые карты</span>
-        </label>
-        <label class="filter-pill">
-          <input type="radio" name="offer-category" value="loans">
-          <span>Займы</span>
-        </label>
-        <label class="filter-pill">
-          <input type="radio" name="offer-category" value="credits">
-          <span>Кредиты</span>
-        </label>
-      </fieldset>
-      <p id="filter-status" role="status" aria-atomic="true" class="visually-hidden"></p>
-    </div>
-  </section>
+      <p class="badge" id="hero-badge">
+        <span class="badge__dot" aria-hidden="true"></span>
+        Только самые выгодные предложения — здесь
+      </p>
 
-  <section class="offers-section" aria-labelledby="offers-heading">
-    <div class="container">
-      <h2 id="offers-heading" tabindex="-1">Предложения</h2>
+      <h1 class="hero__title" id="hero-title">Выгода начинается с правильного выбора</h1>
 
-      <ul class="offers-grid" role="list">
+      <p class="hero__subtitle" id="hero-lead-title">Всё, что нужно для ваших финансов — здесь</p>
 
-        <li role="listitem">
-          <article class="offer-card" data-category="credit-cards">
-            <span class="offer-logo" aria-hidden="true">ТБ</span>
-            <p class="offer-category-label">Кредитная карта</p>
-            <h3 id="offer-name-1">Т-Банк</h3>
-            <p class="offer-product">Кредитная карта Platinum</p>
-            <ul class="offer-terms" role="list">
-              <li>Ставка от 0%</li>
-              <li>Лимит до 300 000 ₽</li>
-              <li>Одобрение 95%</li>
-            </ul>
-            <!-- TODO: replace href="#" with real affiliate link once program approved -->
-            <a href="#" id="offer-cta-1" aria-labelledby="offer-cta-1 offer-name-1" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
+      <p class="hero__lead" id="hero-lead">Деньги на карту, дебетовые и кредитные карты, РКО для бизнеса — собрали самые популярные и лучшие финансовые предложения для вас в одной удобной витрине. Выбирайте подходящий вариант и оформляйте онлайн, без очередей и лишней суеты.</p>
 
-        <li role="listitem">
-          <article class="offer-card" data-category="credit-cards">
-            <span class="offer-logo" aria-hidden="true">АБ</span>
-            <p class="offer-category-label">Кредитная карта</p>
-            <h3 id="offer-name-2">Альфа-Банк</h3>
-            <p class="offer-product">Alfa Card</p>
-            <ul class="offer-terms" role="list">
-              <li>Рассрочка 100 дней</li>
-              <li>Лимит до 500 000 ₽</li>
-              <li>Одобрение 92%</li>
-            </ul>
-            <a href="#" id="offer-cta-2" aria-labelledby="offer-cta-2 offer-name-2" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
+      <div class="hero__actions">
+        <a class="glass glass--accent" href="#offers">
+          <span class="glass__label">Выбрать предложение</span>
+          <svg class="glass__arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="glass" href="#how">
+          <span class="glass__label">Как это работает</span>
+        </a>
+      </div>
 
-        <li role="listitem">
-          <article class="offer-card" data-category="credit-cards">
-            <span class="offer-logo" aria-hidden="true">СБ</span>
-            <p class="offer-category-label">Кредитная карта</p>
-            <h3 id="offer-name-3">Совкомбанк</h3>
-            <p class="offer-product">Карта «Халва»</p>
-            <ul class="offer-terms" role="list">
-              <li>Рассрочка 0%</li>
-              <li>Лимит до 500 000 ₽</li>
-              <li>Кэшбэк до 10%</li>
-            </ul>
-            <a href="#" id="offer-cta-3" aria-labelledby="offer-cta-3 offer-name-3" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="credit-cards">
-            <span class="offer-logo" aria-hidden="true">ОТ</span>
-            <p class="offer-category-label">Кредитная карта</p>
-            <h3 id="offer-name-4">ОТП Банк</h3>
-            <p class="offer-product">OTP Card</p>
-            <ul class="offer-terms" role="list">
-              <li>Ставка от 9.9%</li>
-              <li>Лимит до 300 000 ₽</li>
-              <li>Одобрение 89%</li>
-            </ul>
-            <a href="#" id="offer-cta-4" aria-labelledby="offer-cta-4 offer-name-4" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="debit-cards">
-            <span class="offer-logo" aria-hidden="true">СБ</span>
-            <p class="offer-category-label">Дебетовая карта</p>
-            <h3 id="offer-name-5">Сбербанк</h3>
-            <p class="offer-product">СберКарта</p>
-            <ul class="offer-terms" role="list">
-              <li>Кэшбэк до 30%</li>
-              <li>Без комиссии за снятие</li>
-              <li>Бесплатное обслуживание</li>
-            </ul>
-            <a href="#" id="offer-cta-5" aria-labelledby="offer-cta-5 offer-name-5" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="debit-cards">
-            <span class="offer-logo" aria-hidden="true">ВТ</span>
-            <p class="offer-category-label">Дебетовая карта</p>
-            <h3 id="offer-name-6">ВТБ</h3>
-            <p class="offer-product">Мультикарта</p>
-            <ul class="offer-terms" role="list">
-              <li>Кэшбэк до 15%</li>
-              <li>Доход на остаток 8%</li>
-              <li>Бесплатный выпуск</li>
-            </ul>
-            <a href="#" id="offer-cta-6" aria-labelledby="offer-cta-6 offer-name-6" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="debit-cards">
-            <span class="offer-logo" aria-hidden="true">РБ</span>
-            <p class="offer-category-label">Дебетовая карта</p>
-            <h3 id="offer-name-7">Райффайзенбанк</h3>
-            <p class="offer-product">Дебетовая карта Everyday</p>
-            <ul class="offer-terms" role="list">
-              <li>Кэшбэк 5%</li>
-              <li>Бесплатное обслуживание</li>
-              <li>30 000+ банкоматов</li>
-            </ul>
-            <a href="#" id="offer-cta-7" aria-labelledby="offer-cta-7 offer-name-7" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="loans">
-            <span class="offer-logo" aria-hidden="true">ЗМ</span>
-            <p class="offer-category-label">Заём МФО</p>
-            <h3 id="offer-name-8">Займер</h3>
-            <p class="offer-product">Займ Онлайн</p>
-            <ul class="offer-terms" role="list">
-              <li>До 30 000 ₽</li>
-              <li>Первый займ 0%</li>
-              <li>Решение за 5 минут</li>
-            </ul>
-            <a href="#" id="offer-cta-8" aria-labelledby="offer-cta-8 offer-name-8" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="loans">
-            <span class="offer-logo" aria-hidden="true">ВБ</span>
-            <p class="offer-category-label">Заём МФО</p>
-            <h3 id="offer-name-9">Webbankir</h3>
-            <p class="offer-product">Веббанкир</p>
-            <ul class="offer-terms" role="list">
-              <li>До 100 000 ₽</li>
-              <li>Ставка от 0%</li>
-              <li>Деньги за 15 минут</li>
-            </ul>
-            <a href="#" id="offer-cta-9" aria-labelledby="offer-cta-9 offer-name-9" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="loans">
-            <span class="offer-logo" aria-hidden="true">ММ</span>
-            <p class="offer-category-label">Заём МФО</p>
-            <h3 id="offer-name-10">MoneyMan</h3>
-            <p class="offer-product">МаниМен</p>
-            <ul class="offer-terms" role="list">
-              <li>До 50 000 ₽</li>
-              <li>Первый займ бесплатно</li>
-              <li>Одобрение 96%</li>
-            </ul>
-            <a href="#" id="offer-cta-10" aria-labelledby="offer-cta-10 offer-name-10" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="loans">
-            <span class="offer-logo" aria-hidden="true">БД</span>
-            <p class="offer-category-label">Заём МФО</p>
-            <h3 id="offer-name-11">Быстроденьги</h3>
-            <p class="offer-product">Займ до зарплаты</p>
-            <ul class="offer-terms" role="list">
-              <li>До 30 000 ₽</li>
-              <li>Срок до 30 дней</li>
-              <li>Без справок</li>
-            </ul>
-            <a href="#" id="offer-cta-11" aria-labelledby="offer-cta-11 offer-name-11" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="credits">
-            <span class="offer-logo" aria-hidden="true">ГБ</span>
-            <p class="offer-category-label">Кредит</p>
-            <h3 id="offer-name-12">Газпромбанк</h3>
-            <p class="offer-product">Потребительский кредит</p>
-            <ul class="offer-terms" role="list">
-              <li>Ставка от 11.9%</li>
-              <li>Сумма до 3 000 000 ₽</li>
-              <li>Срок до 7 лет</li>
-            </ul>
-            <a href="#" id="offer-cta-12" aria-labelledby="offer-cta-12 offer-name-12" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="credits">
-            <span class="offer-logo" aria-hidden="true">ХК</span>
-            <p class="offer-category-label">Кредит</p>
-            <h3 id="offer-name-13">Хоум Кредит Банк</h3>
-            <p class="offer-product">Кредит наличными</p>
-            <ul class="offer-terms" role="list">
-              <li>Ставка от 12.5%</li>
-              <li>Сумма до 1 000 000 ₽</li>
-              <li>Без залога</li>
-            </ul>
-            <a href="#" id="offer-cta-13" aria-labelledby="offer-cta-13 offer-name-13" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
-        <li role="listitem">
-          <article class="offer-card" data-category="credits">
-            <span class="offer-logo" aria-hidden="true">ПБ</span>
-            <p class="offer-category-label">Кредит</p>
-            <h3 id="offer-name-14">Почта Банк</h3>
-            <p class="offer-product">Кредит для всех</p>
-            <ul class="offer-terms" role="list">
-              <li>Ставка от 13.9%</li>
-              <li>Сумма до 1 500 000 ₽</li>
-              <li>Решение онлайн</li>
-            </ul>
-            <a href="#" id="offer-cta-14" aria-labelledby="offer-cta-14 offer-name-14" class="btn btn-primary offer-cta">Оформить</a>
-          </article>
-        </li>
-
+      <ul class="stats" id="stats" aria-label="Коротко о витрине">
+        <!-- заполняется из data.js -->
       </ul>
+
     </div>
   </section>
 
-  <section class="about-section" aria-labelledby="about-heading">
-    <div class="container">
-      <h2 id="about-heading" tabindex="-1">О нас</h2>
-      <p>ФинВыбор — независимый сервис сравнения финансовых предложений. Мы собираем условия банков и микрофинансовых организаций в одном месте, чтобы вам было проще подобрать карту, кредит или займ под свои задачи, не изучая десятки сайтов вручную.</p>
+  <!-- ================================ ПАРТНЁРЫ ================================ -->
+  <section class="ticker" aria-labelledby="ticker-title">
+    <h2 class="visually-hidden" id="ticker-title">Партнёры витрины</h2>
+    <div class="ticker__box">
+      <div class="ticker__track" id="ticker"><!-- из data.js --></div>
+    </div>
+    <div class="shell ticker__foot">
+      <!-- Состояние несёт сам текст кнопки. Держать здесь ещё и aria-pressed
+           нельзя: остановленная строка читалась бы как «Запустить движение
+           строки, кнопка, нажата» — два противоположных сигнала подряд. -->
+      <button type="button" class="link-btn" id="ticker-toggle">Остановить движение строки</button>
+    </div>
+  </section>
+
+  <!-- ================================= КАТАЛОГ ================================ -->
+  <section class="section" id="offers" aria-labelledby="offers-title">
+    <div class="shell">
+
+      <p class="eyebrow"><span>01</span> Каталог</p>
+      <h2 class="section__title" id="offers-title">Актуальные предложения</h2>
+      <p class="section__lead">Каждая карточка ведёт на официальный сайт банка или МФО. Витрина ничего не продаёт и не берёт комиссию с посетителя.</p>
+
+      <div class="filters">
+        <h3 class="visually-hidden" id="filters-title">Фильтр офферов по категории</h3>
+        <div class="filters__row" role="group" aria-labelledby="filters-title" id="filters"><!-- из data.js --></div>
+      </div>
+
+      <!-- Счётчик и есть живой регион: раньше рядом висела невидимая копия
+           того же текста, и человек, пришедший по якорю #offers, не мог
+           прочитать, какая категория сейчас выбрана. Регион стоит в разметке
+           заранее: добавленный скриптом после загрузки, в WebKit он иногда
+           не регистрируется, и первое переключение осталось бы неозвученным. -->
+      <p class="offers__count" id="offers-count" role="status" aria-live="polite" aria-atomic="true"></p>
+
+      <ul class="cards" id="cards"><!-- из data.js --></ul>
+
+      <div class="empty" id="empty" hidden>
+        <p class="empty__text">Каталог пока пуст. Предложения появятся здесь после обновления.</p>
+      </div>
+
+      <noscript>
+        <p class="noscript">Каталог предложений собирается скриптом. Включите JavaScript, чтобы увидеть список.</p>
+      </noscript>
+
+    </div>
+  </section>
+
+  <!-- ============================ КАК ЭТО РАБОТАЕТ =========================== -->
+  <section class="section" id="how" aria-labelledby="how-title">
+    <div class="shell">
+      <p class="eyebrow"><span>02</span> Порядок</p>
+      <h2 class="section__title" id="how-title">Как это работает</h2>
+      <p class="section__lead" id="how-lead"></p>
+      <ol class="steps" id="steps"><!-- из data.js --></ol>
+    </div>
+  </section>
+
+  <!-- ============================== ПОЧЕМУ ЗДЕСЬ ============================= -->
+  <section class="section" id="why" aria-labelledby="why-title">
+    <div class="shell">
+      <p class="eyebrow"><span>03</span> Причины</p>
+      <h2 class="section__title" id="why-title">Почему здесь</h2>
+      <p class="section__lead" id="why-lead"></p>
+      <ul class="reasons" id="reasons"><!-- из data.js --></ul>
+    </div>
+  </section>
+
+  <!-- ============================= ЧАСТЫЕ ВОПРОСЫ ============================ -->
+  <section class="section section--faq" id="faq" aria-labelledby="faq-title">
+    <div class="shell shell--narrow">
+      <p class="eyebrow"><span>04</span> Вопросы</p>
+      <h2 class="section__title" id="faq-title">Частые вопросы</h2>
+      <p class="section__lead" id="faq-lead"></p>
+      <div class="faq" id="faq-list"><!-- из data.js --></div>
     </div>
   </section>
 
 </main>
 
-<footer class="site-footer">
-  <div class="container">
-    <p class="disclaimer">ФинВыбор не является банком или микрофинансовой организацией и не принимает решений об одобрении заявок. Все условия предоставлены партнёрами в информационных целях — актуальные ставки, лимиты и требования уточняйте на сайте выбранного банка или МФО перед оформлением.</p>
-    <p class="copyright">© 2026 ФинВыбор. Все права защищены.</p>
+<footer class="footer">
+  <div class="shell">
+    <h2 class="visually-hidden">Правовая информация</h2>
+
+    <div class="footer__top">
+      <a class="brand brand--footer" href="#main">
+        <span class="brand__mark" aria-hidden="true">Ф</span>
+        <span class="brand__name">ФинВыбор</span>
+      </a>
+      <nav class="footer__nav" aria-label="Навигация в подвале">
+        <ul>
+          <li><a href="#offers">Офферы</a></li>
+          <li><a href="#how">Как это работает</a></li>
+          <li><a href="#why">Почему здесь</a></li>
+          <li><a href="#faq">Вопросы</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <p class="footer__text" id="footer-disclaimer"></p>
+    <p class="footer__text footer__text--dim" id="footer-legal"></p>
+
+    <p class="footer__bottom">
+      <span class="footer__age" id="footer-age">18+</span>
+      <span id="footer-copy"></span>
+    </p>
   </div>
 </footer>
 
-<script src="script.js"></script>
+<script src="data.js?v=202609130001"></script>
+<script src="script.js?v=202609130001"></script>
 </body>
 </html>

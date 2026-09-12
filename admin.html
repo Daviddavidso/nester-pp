@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Управление каталогом — ФинВыбор</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="fonts/fonts.css?v=202609130001">
+<link rel="stylesheet" href="styles.css?v=202609130001">
+<link rel="stylesheet" href="admin.css?v=202609130001">
+<style>
+/* Экран входа в админку ФинВыбора. Виден только пока на body висит класс admin--locked. */
+body.admin--locked > *:not(#login-gate){ display:none !important; }
+#login-gate{ display:none; }
+body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:grid;
+  place-items:center; padding:24px; background:#0d0d11; }
+.login-card{ width:100%; max-width:380px; box-sizing:border-box; background:#17171d;
+  border:1px solid #2b2b34; border-radius:18px; padding:28px 26px; color:#f3f3f6;
+  box-shadow:0 20px 60px rgba(0,0,0,.55); }
+.login-card__mark{ display:grid; place-items:center; width:44px; height:44px; border-radius:12px;
+  background:#c0212f; color:#fff; font-weight:800; font-size:20px; margin:0 0 16px; }
+.login-card__title{ margin:0 0 6px; font-size:22px; line-height:1.2; }
+.login-card__sub{ margin:0 0 20px; color:#b7b7c1; font-size:14px; line-height:1.5; }
+#login-gate .field{ margin:0 0 16px; }
+#login-gate label{ display:block; margin:0 0 6px; font-size:14px; font-weight:600; }
+.login-pwd-row{ display:flex; gap:8px; align-items:stretch; }
+#login-gate input[type=password], #login-gate input[type=text]{
+  flex:1 1 auto; min-width:0; padding:11px 12px; border-radius:10px; border:1px solid #34343f;
+  background:#0f0f14; color:#fff; font-size:15px; font-family:inherit; }
+#login-gate input:focus-visible, #login-gate button:focus-visible{
+  outline:3px solid #ff5a6a; outline-offset:2px; }
+#login-gate input[aria-invalid=true]{ border-color:#ff5a6a; }
+#login-gate .hint{ display:block; margin:6px 0 0; color:#9c9ca8; font-size:12.5px; line-height:1.45; }
+.login-alert{ margin:0 0 14px; padding:10px 12px; border-radius:10px; background:#3a1116;
+  border:1px solid #ff5a6a; color:#ffd9dd; font-size:13.5px; line-height:1.4; }
+.login-alert:empty{ display:none; }
+#login-gate .glass--block{ width:100%; justify-content:center; }
+.admin-logout{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer;
+  text-decoration:underline; text-underline-offset:3px; }
+.admin-logout:focus-visible{ outline:3px solid #ff5a6a; outline-offset:2px; }
+#login-gate .visually-hidden{ position:absolute !important; width:1px; height:1px; padding:0;
+  margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* Переделка «Офферы»: категории → список выбранной → окно редактирования. */
+.admin-filters{ margin:2px 0 20px; }
+.admin-list-head{ display:flex; align-items:center; justify-content:space-between;
+  gap:14px; flex-wrap:wrap; margin:0 0 14px; }
+.admin-list-head h3{ margin:0; }
+.admin-list__empty{ list-style:none; color:#b7b7c1; padding:16px 2px; }
+.admin-dialog--form{ width:min(680px,94vw); max-width:94vw; max-height:90vh; overflow:auto; }
+.admin-dialog__head{ display:flex; align-items:flex-start; justify-content:space-between;
+  gap:12px; margin:0 0 10px; }
+.admin-dialog__head h3{ margin:0; }
+.admin-dialog__head .icon-btn{ flex:none; }
+</style>
+</head>
+<body class="admin admin--locked">
+
+<!-- ВХОД. Пароль проверяется в браузере — работает и на GitHub Pages без PHP.
+     В исходнике лежит только sha256-хеш пароля, сам пароль отсюда не достать. -->
+<div id="login-gate">
+  <form class="login-card" id="login-form" novalidate aria-labelledby="login-title">
+    <span class="login-card__mark" aria-hidden="true">Ф</span>
+    <h1 id="login-title" class="login-card__title">Панель управления</h1>
+    <p class="login-card__sub">Каталог сайта maeb-fin.ru. Введите пароль, чтобы редактировать офферы и тексты.</p>
+    <p class="field">
+      <label for="login-pwd">Пароль</label>
+      <span class="login-pwd-row">
+        <input type="password" id="login-pwd" name="password" required aria-required="true"
+               autocomplete="current-password" autocapitalize="off" spellcheck="false"
+               aria-describedby="login-hint">
+        <button type="button" class="glass glass--sm" id="login-toggle">
+          <span class="glass__label">Показать<span class="visually-hidden"> пароль</span></span>
+        </button>
+      </span>
+      <span class="hint" id="login-hint">Пароль выдаёт разработчик сайта.</span>
+    </p>
+    <p class="login-alert" id="login-alert" role="alert" aria-atomic="true"></p>
+    <button type="submit" class="glass glass--accent glass--block"><span class="glass__label">Войти</span></button>
+  </form>
+</div>
+<script>
+  /* Уже входили в этой вкладке — снимаем заслон до отрисовки, чтобы не мигал. */
+  try { if (sessionStorage.getItem("maeb:auth") === "1") {
+    document.body.classList.remove("admin--locked");
+  } } catch (e) {}
+</script>
+
+<a class="skip-link" href="#main">Перейти к основному содержимому</a>
+
+<header class="admin-header">
+  <div class="shell admin-header__inner">
+    <span class="brand">
+      <span class="brand__mark" aria-hidden="true">Ф</span>
+      <span class="brand__name">ФинВыбор · админка</span>
+    </span>
+    <nav class="admin-nav" aria-label="Разделы админки">
+      <ul>
+        <li><a href="#offers-admin">Офферы</a></li>
+        <li><a href="#texts-admin">Тексты</a></li>
+        <li><a href="#export-admin">Публикация</a></li>
+        <li><a href="index.html" target="_blank" rel="noopener noreferrer">Открыть сайт<span class="visually-hidden"> (откроется в новой вкладке)</span></a></li>
+        <li><button type="button" class="admin-logout" id="btn-logout">Выйти</button></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main" tabindex="-1">
+  <div class="shell">
+
+    <h1 class="admin-title">Управление каталогом</h1>
+    <p class="admin-intro">
+      Правки сохраняются в этом браузере и сразу видны на сайте у вас на экране —
+      откройте его в соседней вкладке и проверьте, как получилось.
+      Посетители пока видят прежнюю версию: чтобы правки уехали на сайт,
+      спуститесь в раздел <a href="#export-admin">«Публикация»</a>.
+    </p>
+
+    <!-- Общий индикатор состояния. Живёт постоянно, не пересоздаётся. -->
+    <p class="admin-status" id="status" role="status"></p>
+    <div class="admin-error" id="error-box" role="alert" tabindex="-1" hidden></div>
+
+    <!-- ============================== ОФФЕРЫ ============================== -->
+    <section class="admin-section" id="offers-admin" aria-labelledby="offers-admin-title">
+      <h2 id="offers-admin-title">Офферы</h2>
+      <p class="admin-hint" id="offers-counter"></p>
+
+      <h3 class="visually-hidden" id="admin-filters-title">Категории офферов</h3>
+      <div class="filters__row admin-filters" role="group" aria-labelledby="admin-filters-title" id="admin-filters"></div>
+
+      <div class="admin-list-head">
+        <h3 id="list-title" tabindex="-1">Каталог</h3>
+        <button type="button" class="glass glass--accent glass--sm" id="offer-add"><span class="glass__label">+ Добавить оффер</span></button>
+      </div>
+
+      <ul class="admin-list" id="offer-list"></ul>
+    </section>
+
+    <!-- Окно редактирования оффера. Нативный dialog ловит фокус и Escape,
+         на закрытии возвращает фокус на кнопку, с которой открыли. -->
+    <dialog id="offer-dialog" class="admin-dialog admin-dialog--form" aria-labelledby="form-title">
+      <form class="admin-form" id="offer-form" novalidate>
+        <div class="admin-dialog__head">
+          <h3 id="form-title">Новый оффер</h3>
+          <button type="button" class="icon-btn" id="offer-dialog-close" aria-label="Закрыть без сохранения"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        </div>
+
+        <!-- Сводка ошибок и короткие сообщения этого окна. Снаружи они были
+             бесполезны: при открытом модальном окне остальная страница для
+             скринридера не существует. Роли alert тут нет намеренно —
+             сводку читает переход фокуса на неё, иначе текст звучит дважды. -->
+        <div class="admin-error" data-box="error" tabindex="-1" hidden></div>
+        <p class="admin-status" data-box="status" role="status"></p>
+
+          <fieldset>
+            <legend>Данные оффера</legend>
+
+            <p class="field">
+              <label for="f-cat">Категория <span aria-hidden="true">*</span></label>
+              <select id="f-cat" name="cat" required aria-required="true">
+                <option value="">— выберите —</option>
+              </select>
+            </p>
+
+            <p class="field">
+              <label for="f-partner">Название банка или МФО <span aria-hidden="true">*</span></label>
+              <input type="text" id="f-partner" name="partner" required aria-required="true"
+                     aria-describedby="f-partner-hint" placeholder="Например: Т-Банк">
+              <span class="hint" id="f-partner-hint">Так, как пишет сам партнёр. Это название читают вслух программы для незрячих.</span>
+            </p>
+
+            <p class="field">
+              <label for="f-title">Название продукта <span aria-hidden="true">*</span></label>
+              <input type="text" id="f-title" name="title" required aria-required="true"
+                     aria-describedby="f-title-hint" placeholder="Например: Дебетовая карта Black">
+              <span class="hint" id="f-title-hint">Коротко и по делу — это заголовок карточки.</span>
+            </p>
+
+            <p class="field">
+              <label for="f-tag">Плашка на карточке</label>
+              <input type="text" id="f-tag" name="tag" aria-describedby="f-tag-hint" placeholder="Например: Длинный грейс">
+              <span class="hint" id="f-tag-hint">Два-три слова. Оставьте пустым — плашки не будет.</span>
+            </p>
+
+            <p class="field field--check">
+              <input type="checkbox" id="f-hot" name="hot">
+              <label for="f-hot">Поднять наверх и отметить как «Выбор дня»</label>
+            </p>
+
+            <div class="field-row">
+              <p class="field">
+                <label for="f-logo">Логотип</label>
+                <select id="f-logo" name="logo" aria-describedby="f-logo-hint">
+                  <option value="">— без логотипа —</option>
+                </select>
+                <span class="hint" id="f-logo-hint">Файлы лежат в папке logos. Нет нужного — оставьте пустым, встанет плашка с буквой.</span>
+              </p>
+              <p class="field field--logo-url" id="f-logo-url-field" hidden>
+                <label for="f-logo-url">Ссылка на картинку</label>
+                <input type="url" id="f-logo-url" name="logoUrl" placeholder="https://"
+                       spellcheck="false" autocomplete="off" autocapitalize="off"
+                       aria-describedby="f-logo-url-hint">
+                <span class="hint" id="f-logo-url-hint">Вставьте прямую ссылку на картинку — png, jpg или svg.</span>
+              </p>
+              <p class="field field--tone">
+                <label for="f-tone">Цвет плашки</label>
+                <input type="color" id="f-tone" name="tone" value="#2A2A32">
+              </p>
+            </div>
+
+            <p class="field">
+              <label for="f-logo-file">Загрузить свою картинку</label>
+              <span class="logo-file-row">
+                <input type="file" id="f-logo-file"
+                       accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                       aria-describedby="f-logo-file-hint f-logo-file-err">
+                <span class="logo-preview" id="f-logo-preview" hidden><img id="f-logo-preview-img" alt=""></span>
+              </span>
+              <span class="hint" id="f-logo-file-hint">PNG, JPG, WebP или SVG до 4 МБ. Ужмётся до 512 px и попадёт в библиотеку «Мои картинки» — выбрать её можно для любого оффера.</span>
+              <span class="field-error" id="f-logo-file-err"></span>
+              <span id="f-logo-dl"></span>
+            </p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Условия</legend>
+            <div id="spec-fields" class="spec-fields">
+              <p class="admin-hint">Сначала выберите категорию — поля условий зависят от неё.</p>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Ссылка и кнопка</legend>
+            <p class="field">
+              <label for="f-url">Партнёрская ссылка <span aria-hidden="true">*</span></label>
+              <input type="url" id="f-url" name="url" required aria-required="true"
+                     aria-describedby="f-url-hint" placeholder="https://">
+              <span class="hint" id="f-url-hint">Полный адрес вместе с https://. Если в ссылке есть erid, плашка «Реклама» на карточке появится сама.</span>
+            </p>
+          </fieldset>
+
+          <div class="admin-actions">
+            <button type="submit" class="glass glass--accent glass--sm"><span class="glass__label">Сохранить оффер</span></button>
+            <button type="button" class="glass glass--sm" id="offer-cancel"><span class="glass__label">Отмена</span></button>
+          </div>
+      </form>
+    </dialog>
+
+    <!-- ============================== ТЕКСТЫ ============================== -->
+    <section class="admin-section" id="texts-admin" aria-labelledby="texts-admin-title">
+      <h2 id="texts-admin-title">Тексты сайта</h2>
+      <p class="admin-hint">Меняется то, что человек читает на странице. Пустое поле — блок просто не отрисуется.</p>
+
+      <form class="admin-form admin-form--wide" id="texts-form" novalidate>
+
+        <fieldset>
+          <legend>Первый экран</legend>
+          <p class="field">
+            <label for="t-badge">Плашка над заголовком</label>
+            <input type="text" id="t-badge" name="badge">
+          </p>
+          <p class="field">
+            <label for="t-title">Главный заголовок</label>
+            <input type="text" id="t-title" name="title">
+          </p>
+          <p class="field">
+            <label for="t-leadtitle">Подзаголовок</label>
+            <input type="text" id="t-leadtitle" name="leadTitle">
+          </p>
+          <p class="field">
+            <label for="t-lead">Текст под подзаголовком</label>
+            <textarea id="t-lead" name="lead" rows="4"></textarea>
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Четыре цифры</legend>
+          <div class="field-row" id="stats-fields"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Как это работает</legend>
+          <p class="field">
+            <label for="t-how-title">Заголовок блока</label>
+            <input type="text" id="t-how-title" name="howTitle">
+          </p>
+          <p class="field">
+            <label for="t-how-lead">Вступление</label>
+            <textarea id="t-how-lead" name="howLead" rows="3"></textarea>
+          </p>
+          <div id="steps-fields"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Почему здесь</legend>
+          <p class="field">
+            <label for="t-why-title">Заголовок блока</label>
+            <input type="text" id="t-why-title" name="whyTitle">
+          </p>
+          <p class="field">
+            <label for="t-why-lead">Вступление</label>
+            <textarea id="t-why-lead" name="whyLead" rows="3"></textarea>
+          </p>
+          <div id="reasons-fields"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Частые вопросы</legend>
+          <p class="field">
+            <label for="t-faq-title">Заголовок блока</label>
+            <input type="text" id="t-faq-title" name="faqTitle">
+          </p>
+          <p class="field">
+            <label for="t-faq-lead">Вступление</label>
+            <textarea id="t-faq-lead" name="faqLead" rows="2"></textarea>
+          </p>
+          <div id="faq-fields"></div>
+          <p class="admin-actions">
+            <button type="button" class="glass glass--sm" id="faq-add"><span class="glass__label">Добавить вопрос</span></button>
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Подвал</legend>
+          <p class="field">
+            <label for="t-disclaimer">Дисклеймер</label>
+            <textarea id="t-disclaimer" name="disclaimer" rows="4"></textarea>
+          </p>
+          <p class="field">
+            <label for="t-legal">Строка о маркировке рекламы</label>
+            <textarea id="t-legal" name="legal" rows="2"></textarea>
+          </p>
+        </fieldset>
+
+        <div class="admin-actions">
+          <button type="submit" class="glass glass--accent glass--sm"><span class="glass__label">Сохранить тексты</span></button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============================ ПУБЛИКАЦИЯ ============================ -->
+    <section class="admin-section" id="export-admin" aria-labelledby="export-admin-title">
+      <h2 id="export-admin-title">Публикация</h2>
+      <p class="admin-hint">
+        Три шага: скачать файл, положить его на хостинг рядом с index.html, обновить страницу сайта.
+        Пока файл не заменён, ваши правки видны только в этом браузере.
+      </p>
+
+      <div class="admin-actions">
+        <button type="button" class="glass glass--accent glass--sm" id="export-download"><span class="glass__label">Скачать data.js</span></button>
+        <button type="button" class="glass glass--sm" id="export-copy"><span class="glass__label">Скопировать содержимое</span></button>
+        <button type="button" class="glass glass--sm" id="export-reset"><span class="glass__label">Отменить все правки</span></button>
+      </div>
+
+      <p class="field">
+        <label for="export-text">Содержимое файла data.js</label>
+        <textarea id="export-text" rows="14" readonly spellcheck="false"></textarea>
+      </p>
+    </section>
+
+  </div>
+</main>
+
+<!-- Подтверждение удаления. Нативный dialog сам ловит фокус и Escape. -->
+<dialog id="confirm" class="admin-dialog" role="alertdialog"
+        aria-labelledby="confirm-title" aria-describedby="confirm-text">
+  <h2 id="confirm-title">Удалить?</h2>
+  <p id="confirm-text"></p>
+  <div class="admin-actions">
+    <button type="button" class="glass glass--sm" id="confirm-cancel"><span class="glass__label">Отмена</span></button>
+    <button type="button" class="glass glass--accent glass--sm" id="confirm-ok"><span class="glass__label">Удалить</span></button>
+  </div>
+</dialog>
+
+<!-- Сайт живёт на GitHub Pages, PHP тут нет — каталог грузится обычным файлом. -->
+<script src="data.js?v=202609130001"></script>
+<script src="admin.js?v=202609130001"></script>
+<!-- Сохранение прямо на сайт. Кнопки рисует publish.js; публикует их сервис
+     на Vercel: он проверяет пароль и кладёт data.js в репозиторий сайта,
+     GitHub Pages пересобирает страницы за минуту-другую. Если сервис
+     недоступен, кнопки прячутся — остаётся путь «Скачать data.js». -->
+<script>
+  window.PUBLISH = {
+    api: 'https://maeb-publish.vercel.app/api/publish',
+    zipUrl: 'https://codeload.github.com/Daviddavidso/nester-pp/zip/refs/heads/main',
+    build: function () { return window.SITE_ADMIN.buildDataFile(); },
+    confirmText: 'Каталог на сайте будет заменён этой версией.'
+  };
+</script>
+<script src="publish.js?v=202609130001"></script>
+<script>
+/* Вход в админку ФинВыбора. Пароль проверяется на стороне браузера, поэтому работает
+   и на GitHub Pages, где PHP нет. В исходнике страницы лежит не сам пароль,
+   а sha256 от соли и пароля (тот же, что в .admin-pass) — пароль из него не
+   восстановить. Сменить пароль — записать новый хеш сюда и в .admin-pass. */
+(function () {
+  "use strict";
+  var SALT      = "maeb-v1-3c36f8";
+  var PASS_SHA  = "5b8f6d3adc260c6b7330983d79f74ae19fc546f62c52781be9026fb2a9eaa76f";
+  var SESSION   = "maeb:auth";
+
+  function checkPass(value) {
+    var bytes = new TextEncoder().encode(SALT + value);
+    return crypto.subtle.digest("SHA-256", bytes).then(function (buf) {
+      var hex = "";
+      new Uint8Array(buf).forEach(function (b) { hex += (b < 16 ? "0" : "") + b.toString(16); });
+      return hex === PASS_SHA;
+    });
+  }
+
+  var body   = document.body;
+  var form   = document.getElementById("login-form");
+  var pwd    = document.getElementById("login-pwd");
+  var toggle = document.getElementById("login-toggle");
+  var box    = document.getElementById("login-alert");
+
+  /* Фокус в поле пароля, если заслон ещё стоит. */
+  if (body.classList.contains("admin--locked")) {
+    setTimeout(function () { try { pwd.focus(); } catch (e) {} }, 0);
+  }
+
+  toggle.addEventListener("click", function () {
+    var shown = pwd.type === "text";
+    pwd.type = shown ? "password" : "text";
+    toggle.querySelector(".glass__label").childNodes[0].nodeValue = shown ? "Показать" : "Скрыть";
+    pwd.focus();
+  });
+
+  pwd.addEventListener("input", function () {
+    pwd.removeAttribute("aria-invalid");
+    pwd.setAttribute("aria-describedby", "login-hint");
+    box.textContent = "";
+  });
+
+  function showError(msg) {
+    pwd.setAttribute("aria-invalid", "true");
+    pwd.setAttribute("aria-describedby", "login-hint login-alert");
+    box.textContent = "";                 /* сброс, чтобы одинаковая ошибка объявилась повторно */
+    requestAnimationFrame(function () { box.textContent = msg; });
+    pwd.focus();
+    pwd.select();
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    checkPass(pwd.value).then(function (ok) {
+      if (ok) {
+        try { sessionStorage.setItem(SESSION, "1"); } catch (err) {}
+        body.classList.remove("admin--locked");   /* заслон скрывается по CSS */
+        var m = document.getElementById("main");
+        if (m) m.focus();
+      } else {
+        showError("Неверный пароль. Проверьте раскладку клавиатуры и регистр букв.");
+      }
+    }).catch(function () {
+      /* crypto.subtle нет только вне https — например, если файл открыли с диска. */
+      showError("Не получилось проверить пароль в этом браузере. Откройте админку по адресу maeb-fin.ru/admin.html.");
+    });
+  });
+
+  var out = document.getElementById("btn-logout");
+  if (out) out.addEventListener("click", function () {
+    try { sessionStorage.removeItem(SESSION); } catch (e) {}
+    location.reload();
+  });
+})();
+</script>
+</body>
+</html>

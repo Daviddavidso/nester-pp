@@ -1,0 +1,397 @@
+/* =========================================================================
+   Админка. Тот же тёмный стиль, что и витрина, но плотнее и без свечений:
+   здесь работают, а не любуются.
+   ========================================================================= */
+
+.admin { padding-bottom: 80px; }
+
+.admin-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 14px 0;
+  background: rgba(8, 8, 10, .88);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+.admin-header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 26px;
+}
+.admin-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.admin-nav a {
+  display: inline-block;
+  padding: 8px 12px;
+  min-height: 24px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 15px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.admin-nav a:hover { color: var(--text); background: rgba(255, 255, 255, .07); }
+
+.admin-title {
+  margin-top: 44px;
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -.03em;
+  font-weight: 600;
+}
+.admin-intro {
+  margin-top: 14px;
+  max-width: 74ch;
+  color: var(--muted);
+}
+.admin-intro strong { color: var(--text); }
+
+.admin-status {
+  margin-top: 18px;
+  min-height: 24px;
+  font-size: 15px;
+  color: #7CE0A0;
+}
+.admin-status:empty { margin-top: 0; }
+
+.admin-error {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 45, 45, .55);
+  border-radius: 14px;
+  background: rgba(255, 45, 45, .1);
+  color: #FFB4B4;
+}
+.admin-error ul { margin-top: 8px; }
+.admin-error li { margin-top: 4px; }
+.admin-error a { color: #FFD5D5; }
+
+.admin-section {
+  margin-top: 56px;
+  padding-top: 34px;
+  border-top: 1px solid rgba(255, 255, 255, .09);
+  scroll-margin-top: 90px;
+}
+.admin-section > h2 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.admin-hint {
+  margin-top: 10px;
+  max-width: 74ch;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.admin-grid {
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+/* ------------------------------------------------------------- ФОРМЫ */
+
+.admin-form {
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 20px;
+  background: var(--card);
+}
+.admin-form > h3 { font-size: 19px; font-weight: 600; }
+.admin-form--wide { margin-top: 24px; }
+
+.admin-form fieldset {
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+}
+.admin-form legend {
+  padding: 0 0 12px;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field { margin: 0 0 16px; display: grid; gap: 6px; }
+.field label { font-size: 14.5px; font-weight: 500; }
+.field .hint { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+.field input[type='text'],
+.field input[type='url'],
+.field select,
+.field textarea,
+textarea#export-text {
+  width: 100%;
+  padding: 11px 13px;
+  /* .22 давало 2:1 к фону — поле не читалось как поле. .45 — это 4.5:1
+     и к заливке поля, и к подложке карточки. */
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 11px;
+  background: #08080A;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.field textarea, textarea#export-text { resize: vertical; line-height: 1.5; }
+textarea#export-text { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px; }
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 2px;
+  border-color: transparent;
+}
+
+/* Ошибка помечается не только цветом: добавляется текст и толстая рамка */
+.field input[aria-invalid='true'],
+.field select[aria-invalid='true'] {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+.field-error {
+  font-size: 13.5px;
+  color: #FFB4B4;
+}
+.field-error:empty { display: none; }
+
+.field--check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.field--check input {
+  width: 20px; height: 20px;
+  accent-color: var(--accent-fill);
+}
+.field--check label { font-weight: 400; }
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+/* display: grid у .field сильнее UA-правила [hidden] — возвращаем скрытие.
+   Нужно полю «Ссылка на картинку», которое появляется только при пункте
+   «По ссылке из интернета…». */
+.field[hidden] { display: none; }
+.field--logo-url { grid-column: 1 / -1; }
+.field--tone input[type='color'] {
+  width: 100%;
+  height: 44px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 11px;
+  background: #08080A;
+}
+
+/* Загрузка своей картинки. Рамка светлее обычной: пунктир на тёмном фоне
+   при .22 просто не виден. Превью — та же белая плашка, что и в списке. */
+.logo-file-row { display: flex; align-items: center; gap: 10px; }
+.logo-file-row input[type='file'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 13px;
+  border: 1.5px dashed rgba(255, 255, 255, .45);
+  border-radius: 11px;
+  background: #08080A;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.logo-file-row input[type='file']:hover { border-color: rgba(255, 255, 255, .7); }
+.logo-file-row input[type='file']:focus-visible {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 2px;
+}
+.logo-file-row input[type='file'][aria-invalid='true'] { border-color: var(--accent); }
+.logo-preview {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #FFFFFF;
+  padding: 5px;
+}
+.logo-preview img { width: 100%; height: 100%; object-fit: contain; }
+
+/* Ссылка «Скачать текущую картинку». Белым, а не акцентным красным:
+   мелкий подчёркнутый текст на тёмном фоне должен держать 4.5:1 с запасом. */
+.dl {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+.dl:hover { color: var(--accent-text); }
+
+.spec-fields .field:last-child { margin-bottom: 0; }
+
+.admin-actions {
+  isolation: isolate;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+/* Группы повторяющихся полей (шаги, причины, вопросы) */
+.group {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .02);
+}
+.group > h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.group .field:last-child { margin-bottom: 0; }
+
+/* ------------------------------------------------------------- СПИСОК */
+
+.admin-list-box {
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 20px;
+  background: var(--card);
+}
+.admin-list-box > h3 { font-size: 19px; font-weight: 600; }
+
+.admin-list { margin-top: 16px; display: grid; gap: 10px; }
+
+.admin-item {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 14px;
+  background: var(--card-hi);
+}
+/* Раньше редактируемая строка отличалась только оттенком рамки (2.4:1).
+   Теперь рамка контрастная и вдвое толще, плюс значок перед названием —
+   признак виден и без различения цвета. */
+.admin-item--editing {
+  border-color: var(--accent);
+  border-width: 2px;
+  padding: 11px 13px;
+}
+.admin-item--editing .admin-item__title::before { content: '✎ '; }
+
+.admin-item__logo {
+  width: 40px; height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #FFFFFF;
+  padding: 5px;
+}
+.admin-item__logo img { width: 100%; height: 100%; object-fit: contain; }
+.admin-item__mono {
+  width: 40px; height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+.admin-item__partner { font-size: 13px; color: var(--muted); }
+.admin-item__title { font-size: 15px; font-weight: 500; }
+.admin-item__cat {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  font-size: 12px;
+  color: var(--muted);
+}
+.admin-item__no-url {
+  display: inline-block;
+  margin-top: 4px;
+  margin-left: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 45, 45, .5);
+  background: rgba(255, 45, 45, .12);
+  font-size: 12px;
+  color: var(--accent-text);
+}
+
+.admin-item__tools { display: flex; gap: 6px; }
+.icon-btn {
+  width: 36px; height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .42);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, .12); }
+.icon-btn:disabled { opacity: .5; cursor: default; }
+.icon-btn--danger:hover { background: rgba(255, 45, 45, .22); border-color: rgba(255, 45, 45, .6); }
+.icon-btn svg { width: 16px; height: 16px; }
+
+/* ------------------------------------------------------------- ДИАЛОГ */
+
+.admin-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 20px;
+  background: var(--card-hi);
+  color: var(--text);
+}
+.admin-dialog::backdrop { background: rgba(0, 0, 0, .72); }
+.admin-dialog h2 { font-size: 21px; font-weight: 600; }
+.admin-dialog p { margin-top: 10px; color: var(--muted); }
+
+/* ------------------------------------------------------------ АДАПТИВ */
+
+@media (max-width: 900px) {
+  .admin-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .field-row { grid-template-columns: 1fr; }
+  .admin-item { grid-template-columns: 40px minmax(0, 1fr); }
+  .admin-item__tools { grid-column: 1 / -1; }
+}
+
+/* Тот же предохранитель, что и на сайте: длинное значение в поле или в
+   предпросмотре переносится, а не вылезает за край панели. */
+body { overflow-wrap: break-word; }
+
+/* Плейсхолдеры: у светлой системной темы браузер подставляет свой серый
+   (4.3:1). Фиксируем свой — 6.3:1. */
+.field input::placeholder,
+.field textarea::placeholder { color: #8F8F9C; opacity: 1; }
+
+/* Цели, на которые фокус ставится скриптом (заголовок списка, сводка
+   ошибок), должны показывать рамку: :focus-visible браузеры применяют
+   к tabindex="-1" непоследовательно. */
+#list-title:focus, #main:focus, [data-box="error"]:focus, #error-box:focus {
+  outline: 2px solid #FFFFFF;
+  outline-offset: 3px;
+}
