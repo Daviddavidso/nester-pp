@@ -7,9 +7,9 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta name="color-scheme" content="dark">
-<link rel="stylesheet" href="fonts/fonts.css?v=202609130001">
-<link rel="stylesheet" href="styles.css?v=202609130001">
-<link rel="stylesheet" href="admin.css?v=202609130001">
+<link rel="stylesheet" href="fonts/fonts.css?v=202610130001">
+<link rel="stylesheet" href="styles.css?v=202610130001">
+<link rel="stylesheet" href="admin.css?v=202610130001">
 <style>
 /* Экран входа в админку ФинВыбора. Виден только пока на body висит класс admin--locked. */
 body.admin--locked > *:not(#login-gate){ display:none !important; }
@@ -37,8 +37,12 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
   border:1px solid #ff5a6a; color:#ffd9dd; font-size:13.5px; line-height:1.4; }
 .login-alert:empty{ padding:0; margin:0; border:0; }
 #login-gate .glass--block{ width:100%; justify-content:center; }
-.admin-logout{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer;
+/* «Выйти» — кнопка, но в ряду ссылок шапки выглядит как они: тот же
+   отступ, размер и цвет, иначе она висела выше остальных. */
+.admin-logout{ font:inherit; font-size:15px; color:var(--muted); background:none; border:0;
+  padding:8px 12px; min-height:24px; border-radius:999px; cursor:pointer;
   text-decoration:underline; text-underline-offset:3px; }
+.admin-logout:hover{ color:var(--text); background:rgba(255,255,255,.07); }
 .admin-logout:focus-visible{ outline:3px solid #ff5a6a; outline-offset:2px; }
 #login-gate .visually-hidden{ position:absolute !important; width:1px; height:1px; padding:0;
   margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
@@ -59,12 +63,17 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
 <body class="admin admin--locked">
 
 <!-- ВХОД. Пароль проверяется в браузере — работает и на GitHub Pages без PHP.
-     В исходнике лежит только sha256-хеш пароля, сам пароль отсюда не достать. -->
+     Пароль расшифровывает publish-key.js (ключ сохранения на сайт): подошёл —
+     значит, верный. Ни пароля, ни его быстрого хеша в исходнике нет. -->
 <div id="login-gate">
   <form class="login-card" id="login-form" novalidate aria-labelledby="login-title">
     <span class="login-card__mark" aria-hidden="true">Ф</span>
     <h1 id="login-title" class="login-card__title">Панель управления</h1>
     <p class="login-card__sub">Каталог сайта maeb-fin.ru. Введите пароль, чтобы редактировать офферы и тексты.</p>
+    <p class="login-insecure" id="login-insecure" hidden>
+      Эта страница открыта без защищённого соединения, и проверить пароль браузер не может.
+      <a id="login-secure-link" href="https://maeb-fin.ru/admin.html">Открыть панель по защищённому адресу https://maeb-fin.ru/admin.html</a>
+    </p>
     <p class="field">
       <label for="login-pwd">Пароль</label>
       <span class="login-pwd-row">
@@ -77,13 +86,15 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
       </span>
       <span class="hint" id="login-hint">Пароль выдаёт разработчик сайта.</span>
     </p>
+    <p class="login-status" id="login-status" role="status"></p>
     <p class="login-alert" id="login-alert" role="alert" aria-atomic="true"></p>
     <button type="submit" class="glass glass--accent glass--block"><span class="glass__label">Войти</span></button>
   </form>
 </div>
 <script>
-  /* Уже входили в этой вкладке — снимаем заслон до отрисовки, чтобы не мигал. */
-  try { if (sessionStorage.getItem("maeb:auth") === "1") {
+  /* Уже входили в этой вкладке — снимаем заслон до отрисовки, чтобы не мигал.
+     Ключ сессии новый (maeb:session): у старого не было ключа публикации. */
+  try { if (sessionStorage.getItem("maeb:session") === "1") {
     document.body.classList.remove("admin--locked");
   } } catch (e) {}
 </script>
@@ -100,7 +111,7 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
       <ul>
         <li><a href="#offers-admin">Офферы</a></li>
         <li><a href="#texts-admin">Тексты</a></li>
-        <li><a href="#export-admin">Публикация</a></li>
+        <li><a href="#publish-admin">Сохранение</a></li>
         <li><a href="index.html" target="_blank" rel="noopener noreferrer">Открыть сайт<span class="visually-hidden"> (откроется в новой вкладке)</span></a></li>
         <li><button type="button" class="admin-logout" id="btn-logout">Выйти</button></li>
       </ul>
@@ -115,13 +126,27 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
     <p class="admin-intro">
       Правки сохраняются в этом браузере и сразу видны на сайте у вас на экране —
       откройте его в соседней вкладке и проверьте, как получилось.
-      Посетители пока видят прежнюю версию: чтобы правки уехали на сайт,
-      спуститесь в раздел <a href="#export-admin">«Публикация»</a>.
+      Посетители увидят правки, когда вы нажмёте «Сохранить на сайт»:
+      через минуту-другую сайт обновится сам.
     </p>
 
     <!-- Общий индикатор состояния. Живёт постоянно, не пересоздаётся. -->
     <p class="admin-status" id="status" role="status"></p>
     <div class="admin-error" id="error-box" role="alert" tabindex="-1" hidden></div>
+
+    <!-- ======================= СОХРАНЕНИЕ НА САЙТ ======================= -->
+    <!-- Кнопки обслуживает publish.js: кладёт data.js в репозиторий сайта на
+         GitHub, GitHub Pages пересобирает сайт за минуту-другую. -->
+    <section class="admin-publish" id="publish-admin" aria-labelledby="publish-admin-title">
+      <h2 id="publish-admin-title">Сохранение на сайт</h2>
+      <p class="pub-state" id="pub-state">Проверяю, что сейчас на сайте…</p>
+      <div class="admin-actions">
+        <button type="button" class="glass glass--accent glass--sm" id="pub-save"><span class="glass__label">Сохранить на сайт</span></button>
+        <button type="button" class="glass glass--sm" id="pub-rollback" hidden><span class="glass__label">Вернуть предыдущую версию</span></button>
+        <a class="glass glass--sm" id="pub-zip" href="https://codeload.github.com/Daviddavidso/nester-pp/zip/refs/heads/main"><span class="glass__label">Скачать сайт целиком</span></a>
+      </div>
+      <p class="pub-error" id="pub-error" role="alert"></p>
+    </section>
 
     <!-- ============================== ОФФЕРЫ ============================== -->
     <section class="admin-section" id="offers-admin" aria-labelledby="offers-admin-title">
@@ -343,12 +368,12 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
 
     <!-- ============================ ПУБЛИКАЦИЯ ============================ -->
     <section class="admin-section" id="export-admin" aria-labelledby="export-admin-title">
-      <h2 id="export-admin-title">Публикация</h2>
+      <h2 id="export-admin-title">Копия каталога и сброс правок</h2>
       <p class="admin-hint">
-        Нажмите «Скачать data.js» и отправьте этот файл разработчику — он положит
-        его на сайт, и правки увидят посетители. Пока файл не заменён, ваши правки
-        видны только в этом браузере.
-        «Отменить все правки» вернёт то, что сейчас опубликовано на сайте.
+        «Скачать data.js» сохранит на компьютер копию каталога со всеми правками —
+        на всякий случай или чтобы отправить разработчику.
+        «Отменить все правки» выбросит то, что ещё не сохранено на сайт, и вернёт
+        версию, которая сейчас на сайте.
       </p>
 
       <div class="admin-actions">
@@ -371,126 +396,94 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
         aria-labelledby="confirm-title" aria-describedby="confirm-text">
   <h2 id="confirm-title">Удалить?</h2>
   <p id="confirm-text"></p>
+  <!-- Пока окно открыто, всё вне его для скринридера не существует —
+       сообщения админки («Готово» и т. п.) говорятся отсюда. -->
+  <p class="visually-hidden" data-box="status" role="status"></p>
   <div class="admin-actions">
     <button type="button" class="glass glass--sm" id="confirm-cancel"><span class="glass__label">Отмена</span></button>
     <button type="button" class="glass glass--accent glass--sm" id="confirm-ok"><span class="glass__label">Удалить</span></button>
   </div>
 </dialog>
 
-<!-- Сайт живёт на GitHub Pages, PHP тут нет — каталог грузится обычным файлом. -->
-<script src="data.js?v=202609130001"></script>
-<script src="admin.js?v=202609130001"></script>
-<!-- Сохранение прямо на сайт. Кнопки рисует publish.js; публикует их сервис
-     на Vercel: он проверяет пароль и кладёт data.js в репозиторий сайта,
-     GitHub Pages пересобирает страницы за минуту-другую. Если сервис
-     недоступен, кнопки прячутся — остаётся путь «Скачать data.js». -->
+<!-- Сайт живёт на GitHub Pages, PHP тут нет — каталог грузится обычным файлом.
+     Метка времени в адресе: админка всегда берёт свежий каталог и свежий ключ,
+     а не копию из кеша браузера (Pages разрешает держать файлы 10 минут). -->
+<script>
+  document.write('<script src="data.js?t=' + Date.now() + '"><\/script>');
+  document.write('<script src="publish-key.js?t=' + Date.now() + '"><\/script>');
+</script>
+<script src="draft.js?v=202610130001"></script>
+<script src="admin.js?v=202610130001"></script>
+<!-- Сохранение прямо на сайт: publish.js кладёт data.js в репозиторий сайта
+     через GitHub API ключом из publish-key.js. Нет ключа — кнопка честно
+     называется «Скачать файл с правками» и отдаёт файл для разработчика. -->
 <script>
   window.PUBLISH = {
-    api: 'https://maeb-publish.vercel.app/api/publish',
-    zipUrl: 'https://codeload.github.com/Daviddavidso/nester-pp/zip/refs/heads/main',
-    build: function () { return window.SITE_ADMIN.buildDataFile(); },
-    confirmText: 'Каталог на сайте будет заменён этой версией.'
+    repo: 'Daviddavidso/nester-pp',
+    branch: 'main',
+    file: 'data.js',
+    liveUrl: 'data.js'
   };
 </script>
-<script src="publish.js?v=202609130001"></script>
+<script src="publish.js?v=202610130001"></script>
 <script>
-/* Вход в админку ФинВыбора. Пароль проверяется на стороне браузера, поэтому работает
-   и на GitHub Pages, где PHP нет. В исходнике страницы лежит не сам пароль,
-   а sha256 от соли и пароля (тот же, что в .admin-pass) — пароль из него не
-   восстановить. Сменить пароль — записать новый хеш сюда и в .admin-pass. */
+/* Вход в админку ФинВыбора. Проверка — в браузере, поэтому работает и на
+   GitHub Pages, где сервера нет. Пароль расшифровывает publish-key.js
+   (PBKDF2-SHA256 600 000 итераций + AES-GCM): расшифровалось — пароль
+   верный, а внутри лежит ключ сохранения на сайт. Ни пароля, ни быстрого
+   хеша в исходнике нет — подбирать перебором долго и дорого.
+   Сменить пароль: node tools/publish-key.mjs password (см. README). */
 (function () {
   "use strict";
-  var SALT      = "maeb-v1-3c36f8";
-  var PASS_SHA  = "5b8f6d3adc260c6b7330983d79f74ae19fc546f62c52781be9026fb2a9eaa76f";
-  var SESSION   = "maeb:auth";
-
-  /* Своя sha256, без встроенной криптографии браузера. Она нужна потому,
-     что crypto.subtle работает только на https, а домен пока открывается
-     по http — и вход в панель просто не состоялся бы. Проверено на
-     контрольных векторах, включая кириллицу. */
-  function sha256Hex(str) {
-    var K = [
-      0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-      0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-      0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-      0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-      0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-      0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-      0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-      0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
-    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
-
-    var bytes = [], i, c;
-    for (i = 0; i < str.length; i++) {
-      c = str.charCodeAt(i);
-      if (c < 0x80) bytes.push(c);
-      else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 63));
-      else if (c < 0xd800 || c >= 0xe000) bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
-      else {
-        i++;
-        var cp = 0x10000 + (((c & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
-        bytes.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
-      }
-    }
-
-    var bitLen = bytes.length * 8;
-    bytes.push(0x80);
-    while (bytes.length % 64 !== 56) bytes.push(0);
-    bytes.push(0, 0, 0, 0,
-      (bitLen >>> 24) & 255, (bitLen >>> 16) & 255, (bitLen >>> 8) & 255, bitLen & 255);
-
-    function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
-
-    var w = new Array(64), a, b, cc, d, e, f, g, h, t1, t2, j, off;
-    for (off = 0; off < bytes.length; off += 64) {
-      for (j = 0; j < 16; j++) {
-        w[j] = (bytes[off + j * 4] << 24) | (bytes[off + j * 4 + 1] << 16) |
-               (bytes[off + j * 4 + 2] << 8) | bytes[off + j * 4 + 3];
-      }
-      for (j = 16; j < 64; j++) {
-        var s0 = rr(w[j - 15], 7) ^ rr(w[j - 15], 18) ^ (w[j - 15] >>> 3);
-        var s1 = rr(w[j - 2], 17) ^ rr(w[j - 2], 19) ^ (w[j - 2] >>> 10);
-        w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
-      }
-      a = H[0]; b = H[1]; cc = H[2]; d = H[3]; e = H[4]; f = H[5]; g = H[6]; h = H[7];
-      for (j = 0; j < 64; j++) {
-        t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[j] + w[j]) | 0;
-        t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & cc) ^ (b & cc))) | 0;
-        h = g; g = f; f = e; e = (d + t1) | 0; d = cc; cc = b; b = a; a = (t1 + t2) | 0;
-      }
-      H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + cc) | 0; H[3] = (H[3] + d) | 0;
-      H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
-    }
-
-    var hex = "";
-    for (i = 0; i < 8; i++) hex += ("00000000" + (H[i] >>> 0).toString(16)).slice(-8);
-    return hex;
-  }
-
-  function checkPass(value) {
-    var target = SALT + value;
-    /* На https считает сам браузер, на http — наша функция выше. */
-    if (window.crypto && crypto.subtle && crypto.subtle.digest && window.TextEncoder) {
-      try {
-        return crypto.subtle.digest("SHA-256", new TextEncoder().encode(target)).then(function (buf) {
-          var hex = "";
-          new Uint8Array(buf).forEach(function (b) { hex += (b < 16 ? "0" : "") + b.toString(16); });
-          return hex === PASS_SHA;
-        }, function () { return sha256Hex(target) === PASS_SHA; });
-      } catch (e) { /* ниже посчитаем сами */ }
-    }
-    return Promise.resolve(sha256Hex(target) === PASS_SHA);
-  }
+  var SESSION = "maeb:session";
+  var TOKEN   = "maeb:gh";
 
   var body   = document.body;
   var form   = document.getElementById("login-form");
   var pwd    = document.getElementById("login-pwd");
   var toggle = document.getElementById("login-toggle");
   var box    = document.getElementById("login-alert");
+  var status = document.getElementById("login-status");
+  var submit = form.querySelector('button[type="submit"]');
+  var busy   = false;
 
-  /* Фокус в поле пароля, если заслон ещё стоит. */
-  if (body.classList.contains("admin--locked")) {
+  var secure = !!(window.isSecureContext && window.crypto && crypto.subtle && window.TextEncoder);
+
+  /* Без https браузер не даёт криптографию — проверять пароль нечем.
+     Свой домен просто переводим на https, остальное объясняем словами. */
+  if (!secure && body.classList.contains("admin--locked")) {
+    if (location.protocol === "http:" && /(^|\.)maeb-fin\.ru$/.test(location.hostname)) {
+      location.replace("https://" + location.host + location.pathname);
+      return;
+    }
+    document.getElementById("login-insecure").hidden = false;
+    setTimeout(function () { try { document.getElementById("login-secure-link").focus(); } catch (e) {} }, 0);
+  } else if (body.classList.contains("admin--locked")) {
+    /* Фокус в поле пароля, если заслон ещё стоит. */
     setTimeout(function () { try { pwd.focus(); } catch (e) {} }, 0);
+  }
+
+  function bytes(b64) {
+    var s = atob(b64), out = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+
+  /* Ошибка расшифровки AES-GCM = неверный пароль. Всё остальное — поломка. */
+  function unlock(password) {
+    var k = window.PUBLISH_KEY;
+    if (!k || !k.ct) return Promise.reject(new Error("nokey"));
+    return crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"])
+      .then(function (base) {
+        return crypto.subtle.deriveKey(
+          { name: "PBKDF2", hash: "SHA-256", salt: bytes(k.salt), iterations: k.iter },
+          base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+      })
+      .then(function (key) {
+        return crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes(k.iv) }, key, bytes(k.ct))
+          .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); },
+                function () { var e = new Error("wrong"); e.wrong = true; throw e; });
+      });
   }
 
   toggle.addEventListener("click", function () {
@@ -506,41 +499,66 @@ body.admin--locked #login-gate{ position:fixed; inset:0; z-index:1000; display:g
     box.textContent = "";
   });
 
-  function showError(msg) {
-    pwd.setAttribute("aria-invalid", "true");
-    pwd.setAttribute("aria-describedby", "login-hint login-alert");
-    /* Текст ставим до перевода фокуса: переход фокуса сбрасывает очередь
-       вежливых объявлений, и сообщение пропадало бы неуслышанным. */
+  function setBusy(on) {
+    busy = on;
+    submit.setAttribute("aria-disabled", on ? "true" : "false");
+    status.textContent = on ? "Проверяю пароль…" : "";
+  }
+
+  function showError(msg, invalid) {
+    if (invalid) {
+      pwd.setAttribute("aria-invalid", "true");
+      pwd.setAttribute("aria-describedby", "login-hint login-alert");
+    }
+    /* Пустой такт перед текстом: одинаковая ошибка подряд (Enter дважды в
+       пустом поле) иначе не прозвучала бы второй раз. role=alert объявляет
+       и после перевода фокуса. */
     box.textContent = "";
-    box.textContent = msg;
+    setTimeout(function () { box.textContent = msg; }, 60);
     pwd.focus();
-    pwd.select();
+    if (invalid) pwd.select();
   }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
-    if (!pwd.value) {
-      showError("Введите пароль — поле пустое.");
+    if (busy) return;
+    /* Сначала чистим: второй неверный пароль подряд иначе не прозвучит —
+       текст тот же, фокус уже в поле. */
+    box.textContent = "";
+    if (!secure) {
+      showError("Ошибка: проверить пароль можно только по защищённому адресу https://maeb-fin.ru/admin.html.", false);
       return;
     }
-    checkPass(pwd.value).then(function (ok) {
-      if (ok) {
-        try { sessionStorage.setItem(SESSION, "1"); } catch (err) {}
-        body.classList.remove("admin--locked");   /* заслон скрывается по CSS */
-        var m = document.getElementById("main");
-        if (m) m.focus();
+    if (!pwd.value) {
+      showError("Ошибка: введите пароль — поле пустое.", true);
+      return;
+    }
+    setBusy(true);
+    unlock(pwd.value).then(function (payload) {
+      setBusy(false);
+      try {
+        sessionStorage.setItem(SESSION, "1");
+        if (payload && payload.gh) sessionStorage.setItem(TOKEN, payload.gh);
+        else sessionStorage.removeItem(TOKEN);
+      } catch (err) {}
+      pwd.value = "";
+      body.classList.remove("admin--locked");   /* заслон скрывается по CSS */
+      document.dispatchEvent(new CustomEvent("maeb:unlocked"));
+      var m = document.getElementById("main");
+      if (m) m.focus();
+    }, function (err) {
+      setBusy(false);
+      if (err && err.wrong) {
+        showError("Ошибка: неверный пароль. Проверьте раскладку клавиатуры и регистр букв.", true);
       } else {
-        showError("Неверный пароль. Проверьте раскладку клавиатуры и регистр букв.");
+        showError("Ошибка: не получилось проверить пароль. Обновите страницу и попробуйте ещё раз.", false);
       }
-    }).catch(function () {
-      /* crypto.subtle нет только вне https — например, если файл открыли с диска. */
-      showError("Не получилось проверить пароль. Обновите страницу и попробуйте ещё раз.");
     });
   });
 
   var out = document.getElementById("btn-logout");
   if (out) out.addEventListener("click", function () {
-    try { sessionStorage.removeItem(SESSION); } catch (e) {}
+    try { sessionStorage.removeItem(SESSION); sessionStorage.removeItem(TOKEN); } catch (e) {}
     location.reload();
   });
 })();

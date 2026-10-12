@@ -24,8 +24,8 @@
 <meta property="og:description" content="Дебетовые и кредитные карты, деньги до зарплаты, РКО для бизнеса — в одной витрине.">
 
 <link rel="preload" href="fonts/gyByhwUxId8gMEwYGFWNOITddY4.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="fonts/fonts.css?v=202609130001">
-<link rel="stylesheet" href="styles.css?v=202609130001">
+<link rel="stylesheet" href="fonts/fonts.css?v=202610130001">
+<link rel="stylesheet" href="styles.css?v=202610130001">
 </head>
 <body>
 
@@ -203,7 +203,11 @@
   </div>
 </footer>
 
-<script src="data.js?v=202609130001"></script>
-<script src="script.js?v=202609130001"></script>
+<!-- Каталог меняет клиент из админки, поэтому data.js не должен застревать
+     в кеше браузера (GitHub Pages разрешает держать файл 10 минут).
+     Метка меняется раз в минуту: свежо и без лишних загрузок. -->
+<script>document.write('<script src="data.js?t=' + Math.floor(Date.now() / 60000) + '"><\/script>');</script>
+<script src="draft.js?v=202610130001"></script>
+<script src="script.js?v=202610130001"></script>
 </body>
 </html>

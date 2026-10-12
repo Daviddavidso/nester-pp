@@ -1,18 +1,29 @@
 /* =========================================================================
    ФинВыбор (maeb-fin.ru) — админка.
 
-   Работает без сервера: правки лежат в localStorage этого браузера, а на
-   сайт попадают файлом data.js, который админка собирает и отдаёт кнопкой
-   «Скачать data.js».
+   Работает без сервера: правки лежат в localStorage этого браузера
+   (draft.js), а на сайт уезжают кнопкой «Сохранить на сайт» — publish.js
+   кладёт собранный здесь data.js прямо в репозиторий сайта на GitHub.
 
    Почему так, а не «настоящая» админка с базой: сайт статический, ему не
-   нужен ни хостинг с PHP, ни пароли, ни бэкапы. Файл — это и есть база.
+   нужен хостинг с PHP: файл data.js — это и есть база.
    ========================================================================= */
 
 (function () {
   'use strict';
 
-  var DRAFT_KEY = 'maeb:draft';
+  /* Первые минуты после обновления браузер может отдать admin.html из кеша
+     (Pages разрешает держать его 10 минут) вместе со свежим admin.js —
+     тогда draft.js на странице нет. Один раз перезагружаемся за новой. */
+  if (!window.MaebDraft) {
+    try {
+      if (!sessionStorage.getItem('maeb:reloaded')) {
+        sessionStorage.setItem('maeb:reloaded', '1');
+        location.reload();
+      }
+    } catch (e) { /* без sessionStorage не рискуем зациклиться */ }
+    return;
+  }
 
   /* Что лежит в папке logos. Список руками: браузер не умеет читать папку
      на статическом хостинге. Добавили файл — допишите строку сюда. */
@@ -39,7 +50,15 @@
     ['modulbank', '.png', 'Модульбанк'], ['nskbl', '.png', 'Банк Левобережный'],
     ['pochtabank', '.png', 'Почта Банк'], ['raiffeisen', '.png', 'Райффайзен Банк'],
     ['rshb', '.png', 'Россельхозбанк'], ['tochka', '.png', 'Точка'],
-    ['uralsib', '.png', 'Уралсиб'], ['webzaim', '.png', 'Веб-займ']
+    ['uralsib', '.png', 'Уралсиб'], ['webzaim', '.png', 'Веб-займ'],
+    /* Перенесены из ВЫБОРА 13.10.2026 (иконки 128px + svg). */
+    ['adengi', '.png', 'А Деньги'], ['centrofinans', '.png', 'Центрофинанс'],
+    ['crediteurope', '.svg', 'Кредит Европа Банк'], ['dengisrazu', '.png', 'Деньги сразу'],
+    ['joymoney', '.png', 'Joymoney'], ['nadodeneg', '.svg', 'Надо денег'],
+    ['oneclickmoney', '.png', 'OneClickMoney'], ['privetsosed', '.png', 'Привет Сосед'],
+    ['rocketman', '.png', 'Рокетмен'], ['srochnodengi', '.png', 'Срочно Деньги'],
+    ['svoiludi', '.png', 'Свои Люди'], ['umnye', '.svg', 'Умные Наличные'],
+    ['zaymigo', '.png', 'Zaymigo']
   ];
 
   /* Готовые логотипы банков и МФО: те же файлы из папки logos, разложенные
@@ -50,18 +69,30 @@
     { label: 'Банки', items: [
       ['ozon', 'Ozon Банк'], ['akbars', 'Ак Барс Банк'], ['alfa', 'Альфа-Банк'],
       ['zenit', 'Банк Зенит'], ['nskbl', 'Банк Левобережный'], ['bspb', 'Банк Санкт-Петербург'],
-      ['vtb', 'ВТБ'], ['gpb', 'Газпромбанк'], ['lockobank', 'Локо-Банк'],
-      ['modulbank', 'Модульбанк'], ['mts', 'МТС Банк'], ['otp', 'ОТП Банк'],
-      ['pochtabank', 'Почта Банк'], ['psb', 'ПСБ'], ['raiffeisen', 'Райффайзен Банк'],
-      ['renessans', 'Ренессанс Банк'], ['rshb', 'Россельхозбанк'], ['sber', 'Сбербанк'],
-      ['sovcom', 'Совкомбанк'], ['tbank', 'Т-Банк'], ['tochka', 'Точка'],
-      ['ubrr', 'УБРиР'], ['uralsib', 'Уралсиб'], ['halva', 'Халва']
+      ['vtb', 'ВТБ'], ['gpb', 'Газпромбанк'], ['crediteurope', 'Кредит Европа Банк'],
+      ['lockobank', 'Локо-Банк'], ['modulbank', 'Модульбанк'], ['mts', 'МТС Банк'],
+      ['otp', 'ОТП Банк'], ['pochtabank', 'Почта Банк'], ['psb', 'ПСБ'],
+      ['raiffeisen', 'Райффайзен Банк'], ['renessans', 'Ренессанс Банк'], ['rshb', 'Россельхозбанк'],
+      ['sber', 'Сбербанк'], ['sovcom', 'Совкомбанк'], ['tbank', 'Т-Банк'],
+      ['tochka', 'Точка'], ['ubrr', 'УБРиР'], ['uralsib', 'Уралсиб'],
+      ['forabank', 'Фора-Банк'], ['halva', 'Халва']
     ] },
     { label: 'МФО', items: [
-      ['carmoney', 'CarMoney'], ['moneyman', 'MoneyMan'], ['bistrodengi', 'Быстроденьги'],
-      ['webzaim', 'Веб-займ'], ['webbankir', 'Веббанкир'], ['dozarplaty', 'До Зарплаты'],
-      ['ekapusta', 'еКапуста'], ['zaymer', 'Займер'], ['limezaim', 'Лайм-Займ'],
-      ['migcredit', 'МигКредит'], ['platiza', 'Платиза'], ['turbozaim', 'Турбозайм']
+      ['carmoney', 'CarMoney'], ['joymoney', 'Joymoney'], ['maxcredit', 'Max Credit'],
+      ['moneyman', 'MoneyMan'], ['oneclickmoney', 'OneClickMoney'], ['zaymigo', 'Zaymigo'],
+      ['adengi', 'А Деньги'], ['bistrodengi', 'Быстроденьги'], ['webzaim', 'Веб-займ'],
+      ['webbankir', 'Веббанкир'], ['dengisrazu', 'Деньги сразу'], ['denginadom', 'Деньги на дом'],
+      ['dozarplaty', 'До Зарплаты'], ['ekapusta', 'еКапуста'], ['zaymer', 'Займер'],
+      ['limezaim', 'Лайм-Займ'], ['migcredit', 'МигКредит'], ['nadodeneg', 'Надо денег'],
+      ['platiza', 'Платиза'], ['privetsosed', 'Привет Сосед'], ['rocketman', 'Рокетмен'],
+      ['svoiludi', 'Свои Люди'], ['smsfinance', 'СМС Финанс'], ['srochnodengi', 'Срочно Деньги'],
+      ['turbozaim', 'Турбозайм'], ['umnye', 'Умные Наличные'], ['finmoll', 'Финмолл'],
+      ['centrofinans', 'Центрофинанс']
+    ] },
+    /* Остальные файлы из logos — чтобы ни один не висел без группы и не
+       читался как «картинка из интернета». */
+    { label: 'Другие партнёры', items: [
+      ['ligamfo', 'ЛигаМФО'], ['nebus', 'Небус'], ['prostoyvopros', 'Простой вопрос']
     ] }
   ];
 
@@ -105,28 +136,26 @@
     return n;
   }
 
+  /* Черновик решает draft.js: если он уже совпал с сайтом или давно
+     сохранён, его там же и удаляют — тогда берём то, что опубликовано. */
   function load() {
-    var draft = null;
-    try {
-      var raw = localStorage.getItem(DRAFT_KEY);
-      if (raw) draft = JSON.parse(raw);
-    } catch (e) { draft = null; }
-
-    if (draft && Array.isArray(draft.offers) && draft.content) {
-      state.content = draft.content;
-      state.offers = draft.offers;
-      state.library = Array.isArray(draft.library) ? draft.library : [];
+    var st = MaebDraft.status();
+    if (st.kind !== 'none') {
+      state.content = st.draft.content;
+      state.offers = st.draft.offers;
+      state.library = Array.isArray(st.draft.library) ? st.draft.library : [];
     } else {
-      state.content = clone(CONTENT);
-      state.offers = clone(OFFERS);
+      var live = MaebDraft.live();
+      state.content = clone(live.content);
+      state.offers = clone(live.offers);
       /* Старый data.js может быть собран до появления библиотеки. */
-      state.library = (typeof LIBRARY !== 'undefined' && Array.isArray(LIBRARY)) ? clone(LIBRARY) : [];
+      state.library = clone(live.library || []);
     }
   }
 
   function persist(message) {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+      MaebDraft.write(state);
     } catch (e) {
       showError(['Браузер не дал сохранить правки. Обычно это режим инкогнито ' +
                  'или переполненное хранилище. Скачайте data.js прямо сейчас, ' +
@@ -296,8 +325,11 @@
       }).join('') + '</optgroup>';
     });
 
-    /* Ссылка на чужой хостинг: файл не хранится у нас, в logo лежит URL. */
-    opts += '<option value="' + URL_LOGO + '"' + (isUrl ? ' selected' : '') + '>По ссылке из интернета…</option>';
+    /* Ссылка на чужой хостинг: файл не хранится у нас, в logo лежит URL.
+       Своя группа — иначе пункт читался как последний в списке МФО, и
+       логотипы под ним клиент принимал за «картинки из интернета». */
+    opts += '<optgroup label="Из интернета"><option value="' + URL_LOGO + '"' + (isUrl ? ' selected' : '') +
+            '>Указать ссылку на картинку…</option></optgroup>';
 
     if (sel.indexOf('data:') === 0) {
       /* Немигрированный черновик: картинка лежит прямо в оффере. */
@@ -756,6 +788,9 @@
     $('confirm-title').textContent = opts.title;
     $('confirm-text').textContent = opts.text;
     $('confirm-ok').querySelector('.glass__label').textContent = opts.ok;
+    /* Подпись безопасной кнопки своя у каждого вопроса: рядом с «Отменить
+       все правки» кнопка «Отмена» звучала бы как то же самое действие. */
+    $('confirm-cancel').querySelector('.glass__label').textContent = opts.cancel || 'Отмена';
     confirmAction = opts.onOk;
     dlg.showModal();
     /* Фокус на безопасной кнопке: Enter по привычке ничего не удалит. */
@@ -950,9 +985,27 @@
       .replace(/\r?\n/g, '\\n') + "'";
   }
 
+  /* Заново собрать экран из того, что сейчас в черновике или на сайте:
+     после сброса правок и после возврата прежней версии. */
+  function reloadState() {
+    load();
+    editing = -1;
+    renderCatFilters();
+    renderList();
+    resetForm();
+    renderTextsForm();
+    renderExport();
+  }
+
   /* Открываем наружу для модуля публикации (publish.js): он собирает тот же
      файл, что уходит в «Скачать data.js», и отправляет его на сайт. */
-  window.SITE_ADMIN = { buildDataFile: function () { return buildDataFile(); } };
+  window.SITE_ADMIN = {
+    buildDataFile: function () { return buildDataFile(); },
+    getState: function () { return clone(state); },
+    reload: reloadState,
+    say: function (message) { say(message); },
+    askConfirm: function (opts) { askConfirm(opts); }
+  };
 
   function buildDataFile() {
     var c = state.content;
@@ -1043,7 +1096,7 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-    say('Файл data.js скачан. Положите его на хостинг рядом с index.html — и правки увидят все.');
+    say('Файл data.js скачан — это копия каталога со всеми правками.');
   }
 
   /* --------------------------------------------------------------- СТАРТ */
@@ -1068,7 +1121,7 @@
      а не после первого сохранения. */
   if (migrated) {
     persist('Загруженные картинки перенесены в библиотеку «Мои картинки» — ' +
-            'теперь их можно выбирать для любого оффера. Не забудьте скачать data.js.');
+            'теперь их можно выбирать для любого оффера. Не забудьте нажать «Сохранить на сайт».');
   }
 
   $('f-logo').addEventListener('change', function () {
@@ -1119,6 +1172,7 @@
       /* Без перерисовки формы: фокус остаётся на поле файла, в селекте
          встаёт новая картинка, превью и ссылка скачивания — рядом. */
       syncLogoSelect('lib:' + name);
+      syncUrlField();   /* если был выбран пункт «по ссылке» — прячем поле URL */
       updateLogoAids();
       persist('Картинка добавлена в библиотеку и выбрана — не забудьте сохранить оффер.');
     }, function (msg) {
@@ -1172,8 +1226,17 @@
     }
 
     var isNew = editing < 0;
-    if (isNew) state.offers.push(offer);
-    else state.offers[editing] = offer;
+    if (isNew) {
+      /* Новый встаёт последним в своей категории, а не в хвост всего
+         каталога: на сайте порядок тот же, а в «Все офферы» нет каши. */
+      var at = state.offers.length;
+      for (var k = state.offers.length - 1; k >= 0; k--) {
+        if (state.offers[k].cat === offer.cat) { at = k + 1; break; }
+      }
+      state.offers.splice(at, 0, offer);
+    } else {
+      state.offers[editing] = offer;
+    }
 
     /* Новый оффер показываем в его категории, чтобы он сразу был на виду. */
     if (isNew && offer.cat) activeCat = offer.cat;
@@ -1211,7 +1274,7 @@
   $('texts-form').addEventListener('submit', function (e) {
     e.preventDefault();
     collectTexts();
-    persist('Тексты сохранены. Чтобы их увидели посетители, скачайте data.js.');
+    persist('Тексты сохранены здесь. Чтобы их увидели посетители, нажмите «Сохранить на сайт».');
   });
 
   $('faq-add').addEventListener('click', function () {
@@ -1243,13 +1306,17 @@
   });
 
   $('export-reset').addEventListener('click', function () {
-    if (!confirm('Отменить все правки и вернуться к тому, что сейчас опубликовано на сайте?')) return;
-    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
-    load();
-    renderCatFilters();
-    resetForm();
-    renderTextsForm();
-    renderExport();
-    say('Правки отменены — показано то, что лежит в data.js на сайте.');
+    askConfirm({
+      title: 'Сбросить все правки?',
+      text: 'Всё, что вы изменили и ещё не сохранили на сайт, пропадёт — вернётся версия, ' +
+            'которая сейчас на сайте. Отменить сброс будет нельзя.',
+      ok: 'Сбросить правки',
+      cancel: 'Оставить правки',
+      onOk: function () {
+        MaebDraft.clear();
+        reloadState();
+        say('Правки сброшены — показано то, что сейчас на сайте.');
+      }
+    });
   });
 })();

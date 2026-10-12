@@ -978,8 +978,17 @@ img { max-width: 100%; display: block; }
   font-size: 14px;
   text-align: center;
 }
-.draft-bar .link-btn { color: #FFFFFF; font-size: 14px; }
-.draft-bar .link-btn:hover { color: #FFFFFF; }
+.draft-bar__text { margin: 0; }
+.draft-bar .link-btn,
+.draft-bar__link { color: #FFFFFF; font-size: 14px; }
+.draft-bar .link-btn:hover,
+.draft-bar__link:hover { color: #FFFFFF; }
+.draft-bar__link { padding: 6px 10px; text-decoration: underline; text-underline-offset: 3px; border-radius: 8px; }
+/* Белая обводка фокуса на красном #C81022 — 5.9:1, на зелёном ниже — 13:1. */
+.draft-bar .link-btn:focus-visible,
+.draft-bar__link:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 2px; }
+/* «Сохранено, сайт обновляется» — спокойный тёмно-зелёный, не тревожный красный. */
+.draft-bar--saved { background: #173B24; border-bottom: 1px solid #3E8A57; }
 
 /* ------------------------------------------------------------ АДАПТИВ */
 

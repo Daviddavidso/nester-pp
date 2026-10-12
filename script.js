@@ -13,30 +13,28 @@
 (function () {
   'use strict';
 
-  /* Ключ, под которым админка держит черновик правок в этом браузере. */
-  var DRAFT_KEY = 'maeb:draft';
-
   /* ------------------------------------------------------------ ДАННЫЕ */
 
   var content = CONTENT;
   var offers = OFFERS;
   /* Библиотека картинок из админки. Старый data.js собран до неё — тогда пусто. */
   var library = (typeof LIBRARY !== 'undefined' && Array.isArray(LIBRARY)) ? LIBRARY : [];
-  var draftActive = false;
 
-  try {
-    var raw = localStorage.getItem(DRAFT_KEY);
-    if (raw) {
-      var draft = JSON.parse(raw);
-      if (draft && Array.isArray(draft.offers) && draft.content) {
-        content = draft.content;
-        offers = draft.offers;
-        if (Array.isArray(draft.library)) library = draft.library;
-        draftActive = true;
-      }
+  /* Черновик правок из админки (см. draft.js). Хозяин сайта видит свои
+     правки вместо опубликованного каталога; черновик, который уже совпал
+     с сайтом или давно сохранён, draft.js удаляет сам. */
+  var draftState = { kind: 'none' };
+  var viewingLive = false;
+  if (window.MaebDraft) {
+    draftState = MaebDraft.status();
+    if (draftState.kind === 'edits' && MaebDraft.viewLive()) {
+      viewingLive = true;
+    } else if (draftState.kind !== 'none') {
+      content = draftState.draft.content;
+      offers = draftState.draft.offers;
+      if (Array.isArray(draftState.draft.library)) library = draftState.draft.library;
     }
-  } catch (e) {
-    /* Приватный режим или битый черновик — молча работаем на data.js */
+    if (draftState.kind === 'none') MaebDraft.viewLive(false);
   }
 
   /* --------------------------------------------------------- ХЕЛПЕРЫ */
@@ -79,27 +77,79 @@
 
   /* ------------------------------------------------- ЧЕРНОВИК ИЗ АДМИНКИ */
 
+  /* Плашка видна только хозяину сайта — в браузере, где открывали админку.
+     Это обычный текст страницы, а не живая область: она появляется вместе
+     со страницей, объявлять тут нечего. Кнопки ничего не удаляют — правки
+     живут в админке, плашка только переключает, что показать. */
+  var DRAFT_FOCUS_KEY = 'maeb:draft-focus';
+
+  function niceTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
   function renderDraftNotice() {
-    if (!draftActive) return;
+    if (draftState.kind === 'none') return;
 
-    var bar = el('div', 'draft-bar');
-    bar.setAttribute('role', 'status');
+    var bar = el('section', 'draft-bar');
+    bar.setAttribute('aria-labelledby', 'draft-text');
+    var text = el('p', 'draft-bar__text');
+    text.id = 'draft-text';
+    var action = null;
 
-    var text = el('span', null,
-      'Показаны правки из админки. Их видите только вы в этом браузере — ' +
-      'чтобы их увидели посетители, нажмите в админке «Сохранить на сайт».');
+    if (draftState.kind === 'published') {
+      bar.classList.add('draft-bar--saved');
+      var t = niceTime(draftState.at);
+      text.textContent = 'Ваши правки сохранены на сайт' + (t ? ' в ' + t : '') +
+        '. Сайт обновляется — посетители увидят их через пару минут.';
+      bar.appendChild(text);
+    } else if (viewingLive) {
+      text.textContent = 'Вы смотрите сайт глазами посетителя. Ваши правки не пропали — они в админке.';
+      action = el('button', 'link-btn', 'Показать мои правки');
+      action.type = 'button';
+      action.addEventListener('click', function () {
+        MaebDraft.viewLive(false);
+        try { sessionStorage.setItem(DRAFT_FOCUS_KEY, '1'); } catch (e) {}
+        location.reload();
+      });
+      bar.appendChild(text);
+      bar.appendChild(action);
+    } else {
+      text.textContent = 'Это ваши правки из админки — посетители их пока не видят. ' +
+        'Чтобы их увидели все, нажмите в админке «Сохранить на сайт».';
+      var admin = el('a', 'draft-bar__link', 'Открыть админку');
+      admin.href = 'admin.html';
+      action = el('button', 'link-btn', 'Посмотреть как посетитель');
+      action.type = 'button';
+      action.addEventListener('click', function () {
+        MaebDraft.viewLive(true);
+        try { sessionStorage.setItem(DRAFT_FOCUS_KEY, '1'); } catch (e) {}
+        location.reload();
+      });
+      bar.appendChild(text);
+      bar.appendChild(admin);
+      bar.appendChild(action);
+    }
 
-    var btn = el('button', 'link-btn', 'Вернуть опубликованную версию');
-    btn.type = 'button';
-    btn.addEventListener('click', function () {
-      try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
-      location.reload();
-    });
-
-    bar.appendChild(text);
-    bar.appendChild(btn);
-    document.body.insertBefore(bar, document.body.firstChild);
+    /* После ссылки «Перейти к основному содержимому»: она остаётся первой
+       остановкой таба и перепрыгивает плашку. */
+    var skip = document.querySelector('.skip-link');
+    if (skip && skip.parentNode) skip.parentNode.insertBefore(bar, skip.nextSibling);
+    else document.body.insertBefore(bar, document.body.firstChild);
     document.body.classList.add('has-draft-bar');
+
+    /* Фокус берём только после перезагрузки, которую человек сам запустил
+       кнопкой плашки: на кнопку нового состояния, чтобы прозвучал новый текст. */
+    var wanted = null;
+    try {
+      wanted = sessionStorage.getItem(DRAFT_FOCUS_KEY);
+      sessionStorage.removeItem(DRAFT_FOCUS_KEY);
+    } catch (e) {}
+    if (action && wanted) {
+      action.setAttribute('aria-describedby', 'draft-text');
+      action.focus();
+    }
   }
 
   /* ----------------------------------------------------------- ТЕКСТЫ */

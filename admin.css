@@ -395,3 +395,59 @@ body { overflow-wrap: break-word; }
   outline: 2px solid #FFFFFF;
   outline-offset: 3px;
 }
+
+/* ---------------------------------------- СОХРАНЕНИЕ НА САЙТ (publish.js) */
+
+.admin-publish {
+  margin-top: 28px;
+  scroll-margin-top: 90px;
+  padding: 20px 22px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .03);
+}
+.admin-publish h2 { margin: 0 0 8px; font-size: 22px; }
+.admin-publish .admin-actions { margin-top: 14px; }
+
+.pub-state { margin: 0; font-size: 15px; color: var(--text); }
+/* Несохранённые правки: тёплый тон вторит словам, сам по себе ничего не значит.
+   #FFB454 на тёмном фоне карточки — 10:1. */
+.pub-state[data-dirty="true"] { color: #FFB454; font-weight: 600; }
+
+/* Ошибка публикации видна, а не только звучит: role=alert в разметке. */
+.pub-error {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 45, 45, .55);
+  border-radius: 12px;
+  background: rgba(255, 45, 45, .1);
+  color: #FFB4B4;
+  font-weight: 600;
+}
+/* Пустой блок остаётся в дереве доступности (без display:none): иначе
+   ошибка появлялась бы вместе с узлом, и VoiceOver её мог не объявить. */
+.pub-error:empty { padding: 0; margin: 0; border: 0; }
+
+.glass[aria-disabled="true"] { cursor: progress; }
+
+.pub-spin {
+  width: 14px; height: 14px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%;
+  animation: pubspin .8s linear infinite;
+}
+@keyframes pubspin { to { transform: rotate(360deg); } }
+/* Без анимации значок остаётся на месте — занятость видно и так,
+   плюс строка состояния говорит «Сохраняю на сайт…». */
+@media (prefers-reduced-motion: reduce) { .pub-spin { animation: none; } }
+
+/* Экран входа: «Проверяю пароль…» — пока считается ключ. */
+.login-status { margin: 0 0 12px; font-size: 13.5px; color: #c9c9d3; min-height: 1px; }
+.login-status:empty { margin: 0; }
+.login-insecure { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #5a5a68; background: #202028; color: #f3f3f6; font-size: 13.5px; line-height: 1.45; }
+.login-insecure a { color: #ffd0d5; }
+
+/* Атрибут hidden должен прятать всегда: .glass задаёт display:inline-flex
+   и перебивал его — клиент видел кнопки, которыми пользоваться нельзя. */
+.admin [hidden] { display: none !important; }

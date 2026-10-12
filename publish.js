@@ -1,277 +1,72 @@
 /* ==========================================================================
-   СОХРАНЕНИЕ НА САЙТ — общий модуль для админок витрин.
+   СОХРАНЕНИЕ НА САЙТ — админка maeb-fin.ru.
 
-   Подключается ПОСЛЕ admin.js. Админка сообщает модулю, как собрать файл
-   данных и как себя проверить:
+   Сайт — статика на GitHub Pages, сервера у него нет. Поэтому «Сохранить
+   на сайт» кладёт собранный админкой data.js прямо в репозиторий
+   Daviddavidso/nester-pp через GitHub API, и Pages за минуту-другую
+   пересобирает сайт. Модуль сам проверяет, когда новая версия дошла до
+   сайта, и сообщает «Готово».
 
-     window.PUBLISH = {
-       build:    function () { return '...текст файла data.js...'; },
-       validate: function () { return true; },   // необязательно
-       after:    'селектор',                     // куда воткнуть панель
-     };
+   Ключ к репозиторию — fine-grained токен GitHub только на этот
+   репозиторий (Contents: Read and write). В publish-key.js он лежит
+   зашифрованным паролем админки; расшифровывает его вход в админку
+   (admin.html) и держит в sessionStorage до закрытия вкладки.
 
-   Всё остальное модуль делает сам: рисует блок с кнопками, спрашивает
-   пароль, ходит в api.php, показывает состояние. Если api.php рядом нет
-   (админку открыли локально или хостинг без PHP), кнопки не появляются —
-   остаётся прежний путь: скачать файл и положить его руками.
+   Ключа нет или он перестал действовать — панель переходит в ручной
+   режим: кнопка честно называется «Скачать файл с правками» и отдаёт
+   data.js, который можно прислать разработчику.
+
+   Разметка панели — в admin.html (секция «Сохранение на сайт»),
+   окно подтверждения и объявления — общие с админкой (SITE_ADMIN).
    ========================================================================== */
 
 (function () {
   'use strict';
 
   var cfg = window.PUBLISH;
-  if (!cfg || typeof cfg.build !== 'function') return;
+  var admin = window.SITE_ADMIN;
+  if (!cfg || !admin || !window.MaebDraft) return;
 
-  var API = cfg.api || 'api.php';
+  var GH = 'https://api.github.com';
+  var TOKEN_KEY = 'maeb:gh';
+  var POLL_EVERY = 10000;
+  var POLL_FOR = 6 * 60 * 1000;
 
-  /* Вход подтверждает не cookie, а токен: сервис публикации живёт на другом
-     домене (vercel.app), и cookie туда из браузера не ходят. Токен выдаёт
-     сервер после пароля, живёт 30 дней. */
-  var TOKEN_KEY = 'vybor:publish-token';
-  function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
-  function setToken(t) {
-    try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  function $(id) { return document.getElementById(id); }
+
+  var btnSave = $('pub-save');
+  var btnRoll = $('pub-rollback');
+  var stateLine = $('pub-state');
+  var errLine = $('pub-error');
+  if (!btnSave || !stateLine) return;
+
+  var token = '';
+  try { token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { token = ''; }
+
+  /* manual: null — публикация работает; 'nokey' — ключ не подключён;
+     'dead' — ключ был, но GitHub его больше не принимает. */
+  var manual = token ? null : 'nokey';
+  var busy = false;
+  var lastSaved = null;        // дата последнего сохранения data.js (из истории GitHub)
+  var poll = null;             // { until, timer, announced }
+  var timedOut = false;
+
+  /* ------------------------------------------------------- объявления -- */
+
+  /* Сообщения — через админку: она кладёт их в открытое окно, если оно
+     есть. Иначе «Готово», пришедшее во время правки оффера, не услышать. */
+  function say(text) { admin.say(text); }
+
+  function showError(text) {
+    errLine.textContent = '';
+    /* Пустой такт: одинаковая ошибка подряд иначе не объявляется. */
+    setTimeout(function () { errLine.textContent = text; }, 60);
+    /* Открыто окно (правка оффера) — панель за ним для скринридера немая,
+       поэтому ошибку дублируем в объявление внутри окна. */
+    if (document.querySelector('dialog[open]')) say(text);
   }
 
-  /* Пока сервис публикации недоступен, панель работает в ручном режиме:
-     «Сохранить на сайт» скачивает файл каталога для отправки разработчику,
-     «Скачать сайт целиком» ведёт на архив репозитория. */
-  var manual = false;
-
-  var inFlight = false;
-  var reqSeq = 0;
-  var authed = false;
-  var lastPublished = { at: null };
-  var afterLogin = null;
-  var authHandled = false;
-  var published = null;      // что уже уехало на сайт из этой вкладки
-
-  /* ---------------------------------------------- разметка ------------- */
-
-  /* Кнопки — в стиле стеклянных пилюль сайта (.glass в styles.css): корпус
-     из полупрозрачного стекла, блик по верхней кромке, у главной — красная
-     заливка #E4142A→#C81022→#96101F (белый текст на ней 5.9:1; плоский
-     ярко-красный #FF2D2D в заливку нельзя — белый текст падает до 3.7:1).
-     Светлая рамка обязательна: она несёт контраст границы 3:1 на тёмном фоне. */
-  var CSS = [
-    '.pub { margin: 20px 0; padding: 16px 18px; border: 1px solid rgba(255,255,255,.14);',
-    '       border-radius: 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;',
-    '       isolation: isolate; }',
-    '.pub[hidden], .pub__btn[hidden] { display: none; }',
-    '.pub__btn { position: relative; isolation: isolate; display: inline-flex; align-items: center;',
-    '            justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px;',
-    '            border: 1px solid var(--glass-line, rgba(255,255,255,.40)); border-radius: 999px;',
-    '            cursor: pointer; color: var(--text, #fff); font: inherit; font-weight: 500; font-size: 15px;',
-    '            background: linear-gradient(180deg, rgba(255,255,255,.20) 0%, rgba(255,255,255,.05) 38%,',
-    '              rgba(255,255,255,.02) 62%, rgba(255,255,255,.12) 100%), var(--glass-body, rgba(22,22,28,.55));',
-    '            -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);',
-    '            box-shadow: inset 0 1.5px 0 rgba(255,255,255,.72), inset 0 -12px 26px rgba(255,255,255,.06),',
-    '              0 14px 34px -14px rgba(0,0,0,.95);',
-    '            transition: transform .28s ease, border-color .28s ease; }',
-    '.pub__btn::before { content: ""; position: absolute; left: 7%; right: 7%; top: 2px; height: 42%;',
-    '            border-radius: 999px; background: linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,0));',
-    '            filter: blur(4px); opacity: .55; pointer-events: none; }',
-    '.pub__btn:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.55); }',
-    '.pub__btn:active { transform: translateY(0); }',
-    '.pub__btn:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 3px;',
-    '            box-shadow: 0 0 0 2px #08080A, inset 0 1.5px 0 rgba(255,255,255,.72),',
-    '              0 14px 34px -14px rgba(0,0,0,.95); }',
-    '.pub__btn--main { border-color: rgba(255,255,255,.45); color: #fff;',
-    '            background: linear-gradient(180deg, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 34%,',
-    '              rgba(255,45,45,.18) 58%, rgba(255,255,255,.14) 100%),',
-    '              linear-gradient(180deg, #E4142A 0%, var(--accent-fill, #C81022) 55%, #96101F 100%); }',
-    '.pub__btn--main::after { content: ""; position: absolute; left: 8%; right: 8%; bottom: -14px; height: 26px;',
-    '            z-index: -1; border-radius: 999px; background: var(--accent, #FF2D2D); filter: blur(18px);',
-    '            opacity: .5; pointer-events: none; }',
-    '.pub__btn[aria-disabled="true"] { cursor: progress; }',
-    '.pub__state { flex: 1 1 100%; margin: 0; font-size: .92rem; }',
-    '.pub__state[data-dirty="true"] { color: light-dark(#8A5300, #FFB454); font-weight: 600; }',
-    '.pub__spin { width: 14px; height: 14px; border: 2px solid currentColor;',
-    '             border-right-color: transparent; border-radius: 50%; animation: pubspin .8s linear infinite; }',
-    '@keyframes pubspin { to { transform: rotate(360deg); } }',
-    '@media (prefers-reduced-motion: reduce) { .pub__spin { display: none; }',
-    '  .pub__btn, .pub__btn:hover { transition: none; transform: none; } }',
-    '.pub__dlg { max-width: 440px; padding: 22px; border: 1px solid light-dark(#c9c9d1, #3a3a44);',
-    '            border-radius: 14px; background: light-dark(#ffffff, #17171d); color: CanvasText;',
-    '            box-shadow: 0 20px 60px rgba(0,0,0,.55); }',
-    '.pub__dlg::backdrop { background: rgba(0,0,0,.7); }',
-    '.pub__dlg input[type="password"], .pub__dlg input[type="text"] { min-height: 44px; padding: 10px 12px; width: 100%;',
-    '            border: 1px solid rgba(128,128,128,.9); border-radius: 10px;',
-    '            background: Canvas; color: CanvasText; font: inherit; }',
-    '.pub__row { display: flex; gap: 8px; align-items: flex-start; }',
-    '.pub__row input { flex: 1 1 auto; min-width: 0; }',
-    '.pub__err { color: light-dark(#C62828, #FFB4B4); font-weight: 600; font-size: .88rem; min-height: 0; }',
-    '.pub__err:empty { display: none; }',
-    '.pub__hint { opacity: .75; font-size: .85rem; }',
-    '.pub__vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;',
-    '           border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }'
-  ].join('\n');
-
-  var style = document.createElement('style');
-  style.textContent = CSS;
-  document.head.appendChild(style);
-
-  /* Живые области создаём на старте и больше не трогаем: область, созданная
-     в момент сообщения, у части связок браузер+скринридер не читается. */
-  var live = document.createElement('p');
-  live.className = 'pub__vh';
-  live.setAttribute('role', 'status');
-  var alert = document.createElement('p');
-  alert.className = 'pub__vh';
-  alert.setAttribute('role', 'alert');
-  document.body.insertBefore(alert, document.body.firstChild);
-  document.body.insertBefore(live, document.body.firstChild);
-
-  var box = document.createElement('div');
-  box.className = 'pub';
-  box.innerHTML =
-    '<button class="pub__btn pub__btn--main" type="button" data-pub="save">Сохранить на сайт</button>' +
-    '<button class="pub__btn" type="button" data-pub="zip" hidden>Скачать сайт целиком</button>' +
-    '<button class="pub__btn" type="button" data-pub="rollback" hidden>Вернуть предыдущую версию</button>' +
-    '<button class="pub__btn" type="button" data-pub="logout" hidden>Выйти</button>' +
-    '<p class="pub__state" data-pub="state">Проверяю, работает ли сохранение на сайт…</p>';
-
-  var dlg = document.createElement('dialog');
-  dlg.className = 'pub__dlg';
-  dlg.setAttribute('aria-labelledby', 'pub-title');
-  dlg.setAttribute('aria-describedby', 'pub-intro');
-  dlg.innerHTML =
-    '<form data-pub="form" novalidate>' +
-      '<h2 id="pub-title" style="margin:0 0 8px">Сохранение на сайт</h2>' +
-      '<p id="pub-intro" style="margin:0 0 16px">Введите пароль сайта — после этого правки уедут на сайт. ' +
-        'Пароль спрашиваем один раз, дальше кнопка работает сразу.</p>' +
-      '<label for="pub-pass" style="display:block;font-weight:600;margin-bottom:6px">Пароль сайта</label>' +
-      '<div class="pub__row">' +
-        '<input type="password" id="pub-pass" name="sitekey" autocomplete="current-password" ' +
-          'autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" ' +
-          'aria-describedby="pub-pass-hint pub-pass-err">' +
-        '<button class="pub__btn" type="button" data-pub="toggle" aria-pressed="false" aria-label="Показать пароль">' +
-          '<span aria-hidden="true">👁</span></button>' +
-      '</div>' +
-      '<p class="pub__hint" id="pub-pass-hint">Общий пароль этого сайта, не ваш личный. Его даёт разработчик.</p>' +
-      '<p class="pub__err" id="pub-pass-err"></p>' +
-      '<div style="display:flex;gap:10px;margin-top:18px">' +
-        '<button class="pub__btn" type="button" data-pub="cancel">Отмена</button>' +
-        '<button class="pub__btn pub__btn--main" type="submit" data-pub="ok">Войти и сохранить</button>' +
-      '</div>' +
-    '</form>';
-
-  var confirmDlg = document.createElement('dialog');
-  confirmDlg.className = 'pub__dlg';
-  confirmDlg.setAttribute('role', 'alertdialog');
-  confirmDlg.setAttribute('aria-labelledby', 'pub-c-title');
-  confirmDlg.setAttribute('aria-describedby', 'pub-c-text');
-  confirmDlg.innerHTML =
-    '<h2 id="pub-c-title" style="margin:0 0 8px">Сохранить каталог на сайте?</h2>' +
-    '<p id="pub-c-text" style="margin:0"></p>' +
-    '<div style="display:flex;gap:10px;margin-top:18px">' +
-      '<button class="pub__btn" type="button" data-pub="c-no">Отмена</button>' +
-      '<button class="pub__btn pub__btn--main" type="button" data-pub="c-yes">Сохранить на сайт</button>' +
-    '</div>';
-
-  /* Если страница уже принесла свои кнопки (общая оболочка админки), берём
-     их. Свой блок рисуем только там, где панель осталась старая — иначе
-     на экране оказались бы две пары одинаковых кнопок. */
-  var shell = document.getElementById('publish');
-
-  function el(name, root) { return (root || box).querySelector('[data-pub="' + name + '"]'); }
-
-  var btnSave, btnZip, btnRoll, btnOut, stateLine, extraSave;
-
-  if (shell) {
-    box = null;
-    btnSave = shell;
-    extraSave = document.getElementById('publish-2');
-    btnZip = document.getElementById('zip');
-    btnRoll = document.getElementById('rollback');
-    btnOut = document.getElementById('logout');
-    stateLine = document.getElementById('publish-state');
-  } else {
-    var anchor = cfg.after ? document.querySelector(cfg.after) : null;
-    if (anchor) anchor.parentNode.insertBefore(box, anchor.nextSibling);
-    else {
-      var main = document.querySelector('main') || document.body;
-      main.insertBefore(box, main.firstChild);
-    }
-    btnSave = el('save'); btnZip = el('zip'); btnRoll = el('rollback'); btnOut = el('logout');
-    stateLine = el('state');
-  }
-
-  document.body.appendChild(dlg);
-  document.body.appendChild(confirmDlg);
-
-  /* Живые области оболочки уже есть — свои не плодим. */
-  var shellStatus = document.getElementById('a-status');
-  if (shellStatus) { live.remove(); alert.remove(); live = shellStatus; alert = document.getElementById('a-alert'); }
-
-  /* Диалог подтверждения оболочки (#ask) переиспользуем: он уже вычитан
-     и одинаково ведёт себя во всех витринах. */
-  var shellAsk = document.getElementById('ask');
-  var pass = dlg.querySelector('#pub-pass');
-  var passErr = dlg.querySelector('#pub-pass-err');
-
-  /* ---------------------------------------------- объявления ----------- */
-
-  var timers = {};
-  function say(text, assertive) {
-    var node = assertive ? alert : live;
-    var key = assertive ? 'a' : 's';
-    clearTimeout(timers[key]);
-    node.textContent = '';
-    /* Пустой такт: одинаковый текст подряд иначе не объявляется. */
-    timers[key] = setTimeout(function () { node.textContent = text; }, 80);
-  }
-
-  function focusRing(node) {
-    if (!node) return;
-    node.focus();
-  }
-
-  /* ---------------------------------------------- сеть ----------------- */
-
-  function api(action, payload, ms) {
-    var ctrl = new AbortController();
-    var timer = setTimeout(function () { ctrl.abort(); }, ms || 20000);
-    return fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ action: action, token: getToken() }, payload || {})),
-      signal: ctrl.signal
-    }).then(function (res) {
-      /* Успех — только настоящий JSON с ok:true. Иначе страница-заглушка
-         хостинга («200 и html») прочиталась бы как «готово». */
-      var isJson = (res.headers.get('content-type') || '').indexOf('application/json') !== -1;
-      if (!isJson) return { status: res.status, ok: false, data: {}, notApi: true };
-      return res.json().catch(function () { return {}; }).then(function (d) {
-        return { status: res.status, ok: res.ok, data: d };
-      });
-    }).finally(function () { clearTimeout(timer); });
-  }
-
-  function setBusy(on) {
-    inFlight = on;
-    btnSave.setAttribute('aria-disabled', on ? 'true' : 'false');
-    var spin = btnSave.querySelector('.pub__spin');
-    if (on && !spin) {
-      spin = document.createElement('span');
-      spin.className = 'pub__spin';
-      spin.setAttribute('aria-hidden', 'true');
-      btnSave.appendChild(spin);
-    }
-    if (!on && spin) spin.remove();
-  }
-
-  /* Что сравнивать на «есть ли несохранённые правки». Собранный файл для
-     этого не годится: в его шапке стоит время сборки. */
-  function snapshot() {
-    return typeof cfg.stateHash === 'function' ? cfg.stateHash() : cfg.build();
-  }
-
-  function hashOf(s) {
-    var h = 0;
-    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    return String(h) + ':' + s.length;
-  }
+  function clearError() { errLine.textContent = ''; }
 
   function niceTime(iso) {
     if (!iso) return '';
@@ -283,313 +78,353 @@
       : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ' в ' + t;
   }
 
-  /* Состояние несут слова, а не только цвет. Живой областью строка не
-     является: она меняется на каждую правку и заговорила бы сама с собой. */
-  function refresh() {
-    var when = niceTime(lastPublished.at);
-    var now;
-    try { now = hashOf(snapshot()); } catch (e) { now = null; }
-    var pending = now === null || now !== published;
-    stateLine.setAttribute('data-dirty', pending ? 'true' : 'false');
-    if (pending) {
-      stateLine.textContent = when
-        ? 'Есть правки, которых нет на сайте. Последнее сохранение: ' + when + '.'
-        : 'Есть правки, которых нет на сайте. Нажмите «Сохранить на сайт».';
+  /* ------------------------------------------------------- состояние --- */
+
+  function setLabel(btn, text) {
+    var l = btn.querySelector('.glass__label');
+    (l || btn).textContent = text;
+  }
+
+  /* Кнопку прячем — фокус сначала на главную, иначе он падает в body. */
+  function hide(btn) {
+    if (!btn || btn.hidden) return;
+    if (document.activeElement === btn) btnSave.focus();
+    btn.hidden = true;
+  }
+
+  function applyMode() {
+    setLabel(btnSave, manual ? 'Скачать файл с правками' : 'Сохранить на сайт');
+    if (manual) hide(btnRoll);
+    else if (btnRoll) btnRoll.hidden = false;
+  }
+
+  /* Строка состояния — обычный текст, не живая область: она пересчитывается
+     каждые две секунды и заговорила бы сама с собой. Пишем, только если
+     текст поменялся. Состояние несут слова, цвет лишь вторит им. */
+  function render() {
+    var text, dirty = false;
+    if (busy) {
+      text = 'Сохраняю на сайт…';
     } else {
-      stateLine.textContent = when ? 'Всё сохранено на сайте: ' + when + '.' : 'На сайте текущая версия.';
-    }
-  }
-
-  function problem(res) {
-    if (res.notApi) return 'Сайт ответил не по делу — сохранение не прошло. Правки на месте, ничего не потеряно.';
-    var msg = res.data && res.data.error ? String(res.data.error).slice(0, 140) : '';
-    if (res.status === 413) return msg || 'Слишком тяжёлая картинка — сайт её не принял. Правки остались здесь.';
-    if (res.status >= 500) return 'На сайте ошибка ' + res.status + '. Правки остались здесь, попробуйте через пару минут.';
-    return (msg || 'Сайт отказался принять правки.') + ' Правки остались здесь.';
-  }
-
-  function run(action) {
-    if (inFlight) { say('Идёт сохранение, подождите.'); return; }
-    setBusy(true);
-    var my = ++reqSeq;
-    timers.slow = setTimeout(function () { say('Сохраняю на сайт…'); }, 1000);
-
-    var body = action === 'rollback' ? {} : { data: cfg.build() };
-    api(action, body, 25000).then(function (res) {
-      if (my !== reqSeq) return;
-      clearTimeout(timers.slow);
-      setBusy(false);
-
-      if (res.status === 401) {
-        authed = false;
-        setToken('');
-        afterLogin = function () { run(action); };
-        openAuth();
-        return;
+      var st = MaebDraft.status();
+      if (manual === 'dead') {
+        text = 'Ключ сохранения на сайт больше не действует — его должен обновить разработчик. ' +
+               'Пока «Скачать файл с правками» скачивает data.js: отправьте его разработчику.';
+        dirty = st.kind === 'edits';
+      } else if (manual) {
+        text = 'Сохранение на сайт ещё не подключено. «Скачать файл с правками» скачает data.js — ' +
+               'отправьте его разработчику, и правки появятся на сайте.';
+        dirty = st.kind === 'edits';
+      } else if (st.kind === 'edits') {
+        dirty = true;
+        text = 'Есть правки, которых нет на сайте. Нажмите «Сохранить на сайт».';
+      } else if (st.kind === 'published') {
+        text = timedOut
+          ? 'Сохранено ' + niceTime(st.at) + '. Сайт ещё обновляется — иногда это до 10 минут, делать ничего не нужно.'
+          : 'Сохранено ' + niceTime(st.at) + '. Сайт обновляется — обычно это 1–2 минуты.';
+      } else {
+        text = 'Всё сохранено: на сайте та же версия, что здесь.' +
+               (lastSaved ? ' Последнее сохранение — ' + niceTime(lastSaved) + '.' : '');
       }
-      if (!res.ok || !res.data.ok) { say(problem(res), true); return; }
+    }
+    if (stateLine.textContent !== text) stateLine.textContent = text;
+    stateLine.setAttribute('data-dirty', dirty ? 'true' : 'false');
+  }
 
-      authed = true;
-      lastPublished = res.data.published || lastPublished;
-      published = action === 'rollback' ? null : hashOf(snapshot());
-      btnOut.hidden = false; btnZip.hidden = false; btnRoll.hidden = false;
-      refresh();
-      say(action === 'rollback'
-        ? 'Прежняя версия возвращается на сайт: изменения появятся у посетителей в течение пары минут.'
-        : 'Сохранено. Сайт обновится сам в течение пары минут.');
-      if (action === 'rollback') setTimeout(function () { location.reload(); }, 1500);
-    }).catch(function (err) {
-      if (my !== reqSeq) return;
-      clearTimeout(timers.slow);
-      setBusy(false);
-      say(err && err.name === 'AbortError'
-        ? 'Сайт не ответил. Ничего не сохранено, правки на месте — попробуйте ещё раз.'
-        : 'Связи с сайтом нет. Ничего не сохранено, правки на месте.', true);
+  function setBusy(on) {
+    busy = on;
+    btnSave.setAttribute('aria-disabled', on ? 'true' : 'false');
+    if (btnRoll) btnRoll.setAttribute('aria-disabled', on ? 'true' : 'false');
+    var spin = btnSave.querySelector('.pub-spin');
+    if (on && !spin) {
+      spin = document.createElement('span');
+      spin.className = 'pub-spin';
+      spin.setAttribute('aria-hidden', 'true');
+      btnSave.appendChild(spin);
+    }
+    if (!on && spin) spin.remove();
+    render();
+  }
+
+  /* ---------------------------------------------------------- GitHub --- */
+
+  function fail(kind, status, extra) {
+    var e = new Error(kind);
+    e.kind = kind; e.status = status || 0; e.extra = extra || '';
+    return e;
+  }
+
+  function gh(path, init, accept) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, 25000);
+    var opts = Object.assign({ cache: 'no-store', signal: ctrl.signal }, init || {});
+    opts.headers = Object.assign({
+      'Accept': accept || 'application/vnd.github+json',
+      'Authorization': 'Bearer ' + token,
+      'X-GitHub-Api-Version': '2022-11-28'
+    }, (init && init.headers) || {});
+    return fetch(GH + path, opts).then(function (res) {
+      clearTimeout(timer);
+      if (res.ok) return res;
+      if (res.status === 401) throw fail('dead', 401);
+      if (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0') throw fail('rate', 403);
+      if (res.status === 403 || res.status === 404) throw fail('dead', res.status);
+      if (res.status === 409) throw fail('conflict', 409);
+      if (res.status === 422) {
+        return res.json().catch(function () { return {}; }).then(function (d) {
+          var msg = String((d && d.message) || '');
+          throw fail(/sha/i.test(msg) ? 'conflict' : 'rejected', 422, msg);
+        });
+      }
+      if (res.status === 413) throw fail('big', 413);
+      throw fail('server', res.status);
+    }, function (err) {
+      clearTimeout(timer);
+      throw fail(err && err.name === 'AbortError' ? 'timeout' : 'network');
     });
   }
 
-  /* ---------------------------------------------- подтверждение -------- */
+  var repoPath = '/repos/' + cfg.repo;
 
-  var pendingRun = null;
+  function currentSha() {
+    return gh(repoPath + '/contents/' + cfg.file + '?ref=' + encodeURIComponent(cfg.branch))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { return d.sha; });
+  }
 
-  function ask(title, text, yes, fn) {
-    var d = shellAsk || confirmDlg;
-    if (d.open) return;
-    pendingRun = fn;
-    if (shellAsk) {
-      document.getElementById('ask-title').textContent = title;
-      document.getElementById('ask-text').textContent = text;
-      var y = document.getElementById('ask-yes');
-      y.textContent = yes;
-      y.setAttribute('data-pub-run', '1');      // это наше подтверждение, не удаление
-      d.showModal();
-      document.getElementById('ask-no').focus({ preventScroll: true });
+  /* UTF-8 → base64 без устаревших escape/unescape. */
+  function b64(text) {
+    var bytes = new TextEncoder().encode(text);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  /* Кладём файл. Если между чтением и записью файл успели поменять
+     (вторая вкладка, разработчик), GitHub отвечает конфликтом — тогда
+     берём свежую отметку и пробуем ещё раз. */
+  function putFile(text, message, retried) {
+    return currentSha().then(function (sha) {
+      return gh(repoPath + '/contents/' + cfg.file, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message, content: b64(text), sha: sha, branch: cfg.branch })
+      });
+    }).catch(function (e) {
+      if (e.kind === 'conflict' && !retried) return putFile(text, message, true);
+      throw e;
+    });
+  }
+
+  function loadLastSaved() {
+    if (manual) return;
+    gh(repoPath + '/commits?path=' + encodeURIComponent(cfg.file) + '&sha=' + encodeURIComponent(cfg.branch) + '&per_page=1')
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        var c = Array.isArray(list) && list[0];
+        lastSaved = c ? (c.commit.committer.date || c.commit.author.date) : null;
+        render();
+      })
+      .catch(function (e) { if (e.kind === 'dead') goManual('dead', false); });
+  }
+
+  /* ------------------------------------------------------- ошибки ------ */
+
+  function goManual(reason, announce) {
+    manual = reason;
+    applyMode();
+    render();
+    if (announce) {
+      showError('Ошибка: ключ сохранения на сайт больше не действует. Правки на месте. ' +
+                'Нажмите «Скачать файл с правками» и отправьте файл разработчику.');
+    }
+  }
+
+  function explain(e) {
+    switch (e && e.kind) {
+      case 'dead': goManual('dead', true); return;
+      case 'rate': showError('Ошибка: GitHub временно ограничил запросы. Правки на месте — попробуйте через несколько минут.'); return;
+      case 'timeout': showError('Ошибка: сервер сохранения не ответил. Правки на месте — нажмите «Сохранить на сайт» ещё раз.'); return;
+      case 'network': showError('Ошибка: нет связи с сервером сохранения. Проверьте интернет и нажмите «Сохранить на сайт» ещё раз.'); return;
+      case 'big': showError('Ошибка: файл слишком большой — скорее всего, из-за тяжёлой картинки. Уменьшите её и сохраните снова.'); return;
+      case 'conflict': showError('Ошибка: каталог на сайте только что изменился. Обновите страницу и сохраните ещё раз.'); return;
+      case 'noprev': showError('Ошибка: предыдущей версии нет — возвращать не к чему.'); return;
+      case 'badprev': showError('Ошибка: предыдущая версия каталога повреждена, возвращать её нельзя.'); return;
+      case 'build': showError('Ошибка: не получилось собрать каталог. Правки на месте — скачайте копию кнопкой «Скачать data.js».'); return;
+      default:
+        showError('Ошибка: сохранение не прошло' + (e && e.status ? ' (код ' + e.status + ')' : '') +
+                  '. Правки на месте — попробуйте через пару минут.');
+    }
+  }
+
+  /* ------------------------------------------- «дошло ли до сайта» ----- */
+
+  /* Раз в 10 секунд читаем data.js с самого сайта и сравниваем с тем, что
+     сохранили. Объявляем только смену состояния, фокус не трогаем. */
+  function startPolling(target) {
+    stopPolling();
+    timedOut = false;
+    poll = { target: target, until: Date.now() + POLL_FOR, timer: null };
+    tick();
+  }
+
+  function stopPolling() {
+    if (poll && poll.timer) clearTimeout(poll.timer);
+    poll = null;
+  }
+
+  function tick() {
+    if (!poll) return;
+    var p = poll;
+    fetch(cfg.liveUrl + '?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (text) {
+        if (poll !== p) return;
+        var s = null;
+        try { s = text ? MaebDraft.parseDataFile(text) : null; } catch (e) { s = null; }
+        if (s && MaebDraft.canon(s) === MaebDraft.canon(p.target)) {
+          MaebDraft.setLive(s);
+          stopPolling();
+          lastSaved = new Date().toISOString();
+          render();
+          say('Готово — правки на сайте, их видят посетители.');
+          return;
+        }
+        next(p);
+      }, function () { if (poll === p) next(p); });
+  }
+
+  function next(p) {
+    if (Date.now() > p.until) {
+      stopPolling();
+      timedOut = true;
+      render();
+      say('Сайт ещё обновляется. Правки сохранены — иногда сайт обновляется до 10 минут.');
       return;
     }
-    confirmDlg.querySelector('#pub-c-title').textContent = title;
-    confirmDlg.querySelector('#pub-c-text').textContent = text;
-    el('c-yes', confirmDlg).textContent = yes;
-    confirmDlg.showModal();
-    el('c-no', confirmDlg).focus();   // фокус на безопасную кнопку
+    p.timer = setTimeout(tick, POLL_EVERY);
   }
 
-  /* Ядро админки делает работу в обработчике кнопки и там же чистит своё
-     pending; наш запуск помечен атрибутом, чтобы не спутать с удалением. */
-  if (shellAsk) {
-    document.getElementById('ask-yes').addEventListener('click', function () {
-      if (this.getAttribute('data-pub-run') !== '1') return;
-      this.removeAttribute('data-pub-run');
-      var fn = pendingRun;
-      pendingRun = null;
-      if (fn) fn();
-    });
-    document.getElementById('ask-no').addEventListener('click', function () {
-      var y = document.getElementById('ask-yes');
-      if (y.getAttribute('data-pub-run') === '1') { y.removeAttribute('data-pub-run'); pendingRun = null; }
-    });
-  }
+  /* ----------------------------------------------------------- действия */
 
-  el('c-no', confirmDlg).addEventListener('click', function () {
-    pendingRun = null;
-    confirmDlg.close();
-    focusRing(btnSave);
-  });
-
-  /* Работу делаем здесь, а не в обработчике close: событие close приходит
-     не во всех окружениях, и действие тогда молча не случается. */
-  el('c-yes', confirmDlg).addEventListener('click', function () {
-    var fn = pendingRun;
-    pendingRun = null;
-    confirmDlg.close();
-    if (fn) fn();
-  });
-
-  confirmDlg.addEventListener('cancel', function () { pendingRun = null; });
-
-  /* ---------------------------------------------- кнопки --------------- */
-
-  /* Ручной путь: тот же файл, что и «Скачать data.js», но с объяснением. */
-  function manualDownload() {
+  function download() {
     var text;
-    try { text = cfg.build(); } catch (e) { say('Не получилось собрать файл. Попробуйте кнопку «Скачать data.js» внизу.', true); return; }
+    try { text = admin.buildDataFile(); } catch (e) { explain({ kind: 'build' }); return; }
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/javascript;charset=utf-8' }));
     a.download = 'data.js';
     document.body.appendChild(a);
     a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    if (stateLine) {
-      stateLine.removeAttribute('data-dirty');
-      stateLine.textContent = 'Файл data.js с правками скачан. Отправьте его разработчику — и правки появятся на сайте.';
-    }
-    say('Файл data.js скачан. Отправьте его разработчику — и правки появятся на сайте.');
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    say('Файл data.js скачан. Отправьте его разработчику — он выложит правки на сайт.');
   }
 
-  function onSaveClick() {
-    if (manual) {
-      ask('Сохранение через разработчика',
-          'Сейчас скачается файл data.js с вашими правками. Отправьте его разработчику в Telegram — ' +
-          'он выложит правки на сайт.',
-          'Скачать файл',
-          manualDownload);
+  function publish() {
+    var text, snap;
+    try { text = admin.buildDataFile(); snap = admin.getState(); }
+    catch (e) { explain({ kind: 'build' }); return; }
+
+    clearError();
+    setBusy(true);
+    putFile(text, 'Каталог: сохранение из админки').then(function () {
+      var at = new Date().toISOString();
+      try { MaebDraft.write(snap, at); } catch (e) { /* хранилище недоступно — переживём */ }
+      setBusy(false);
+      say('Сохранено. Сайт обновится за 1–2 минуты — сообщу, когда правки появятся.');
+      startPolling(snap);
+    }, function (e) {
+      setBusy(false);
+      explain(e);
+    });
+  }
+
+  function rollback() {
+    clearError();
+    setBusy(true);
+    var oldText, oldState;
+    gh(repoPath + '/commits?path=' + encodeURIComponent(cfg.file) + '&sha=' + encodeURIComponent(cfg.branch) + '&per_page=2')
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        if (!Array.isArray(list) || list.length < 2) throw fail('noprev');
+        return gh(repoPath + '/contents/' + cfg.file + '?ref=' + list[1].sha, null, 'application/vnd.github.raw');
+      })
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        oldText = text;
+        try { oldState = MaebDraft.parseDataFile(text); } catch (e) { throw fail('badprev'); }
+        if (!oldState || !Array.isArray(oldState.offers)) throw fail('badprev');
+        return putFile(oldText, 'Каталог: возврат предыдущей версии из админки');
+      })
+      .then(function () {
+        try { MaebDraft.write(oldState, new Date().toISOString()); } catch (e) {}
+        /* Без перезагрузки: она обрывает речь и теряет фокус. Экран
+           админки просто перерисовывается из прежней версии. */
+        admin.reload();
+        setBusy(false);
+        say('Прежняя версия возвращается на сайт. Это займёт 1–2 минуты — сообщу, когда сайт обновится.');
+        startPolling(oldState);
+      })
+      .catch(function (e) {
+        setBusy(false);
+        explain(e);
+      });
+  }
+
+  btnSave.addEventListener('click', function () {
+    if (busy) { say('Идёт сохранение, подождите.'); return; }
+    clearError();
+    if (manual) { download(); return; }
+    if (MaebDraft.status().kind !== 'edits') {
+      say('Сохранять нечего: на сайте уже эта версия.');
       return;
     }
-    if (inFlight) { say('Идёт сохранение, подождите.'); return; }
-    if (typeof cfg.validate === 'function' && !cfg.validate()) return;
-    ask('Сохранить каталог на сайте?',
-        (cfg.confirmText || 'Каталог на сайте будет заменён этой версией.') +
-        ' Прежняя версия сохранится — её вернёт кнопка «Вернуть предыдущую версию».',
-        'Сохранить на сайт',
-        function () { run('publish'); });
-  }
-  btnSave.addEventListener('click', onSaveClick);
-  if (extraSave) extraSave.addEventListener('click', onSaveClick);
-
-  btnRoll.addEventListener('click', function () {
-    ask('Вернуть предыдущую версию?',
-        'Сайт откатится к каталогу, который был до последнего сохранения.',
-        'Вернуть',
-        function () { run('rollback'); });
-  });
-
-  btnOut.addEventListener('click', function () {
-    api('logout').catch(function () {});   /* серверу это только для сведения */
-    setToken('');
-    authed = false;
-    btnOut.hidden = true;
-    say('Вы вышли. Правки остались в браузере.');
-  });
-
-  btnZip.addEventListener('click', function () {
-    if (manual) {
-      if (cfg.zipUrl) { window.location.href = cfg.zipUrl; say('Архив сайта пошёл в загрузки.'); }
-      return;
-    }
-    say('Собираю архив сайта…');
-    api('zip', null, 15000).then(function (res) {
-      if (res.status === 401) { authed = false; setToken(''); afterLogin = null; openAuth(); return; }
-      if (res.ok && res.data.ok && res.data.url) {
-        /* Ссылка отдаёт файл (attachment), страница никуда не уходит. */
-        window.location.href = res.data.url;
-        say('Архив сайта пошёл в загрузки.');
-      } else {
-        say(problem(res), true);
-      }
-    }).catch(function () { say('Связи с сайтом нет — архив не собрался. Попробуйте ещё раз.', true); });
-  });
-
-  /* ---------------------------------------------- вход ----------------- */
-
-  function cleanup() {
-    pass.value = '';
-    pass.type = 'password';
-    passErr.textContent = '';
-    pass.removeAttribute('aria-invalid');
-    el('toggle', dlg).setAttribute('aria-pressed', 'false');
-  }
-
-  function openAuth() {
-    if (dlg.open) return;
-    authHandled = false;
-    cleanup();
-    dlg.showModal();
-    pass.focus();
-  }
-
-  el('cancel', dlg).addEventListener('click', function () {
-    afterLogin = null;
-    authHandled = true;
-    cleanup();
-    dlg.close();
-    focusRing(btnSave);
-  });
-
-  /* Имя кнопки постоянное, состояние — в aria-pressed: пара «меняющееся имя
-     + aria-pressed» читается как «Скрыть пароль, нажата», то есть наоборот. */
-  el('toggle', dlg).addEventListener('click', function () {
-    var shown = pass.type === 'text';
-    var a = pass.selectionStart, b = pass.selectionEnd;
-    pass.type = shown ? 'password' : 'text';
-    this.setAttribute('aria-pressed', shown ? 'false' : 'true');
-    try { pass.setSelectionRange(a, b); } catch (e) { /* не все типы дают */ }
-  });
-
-  el('form', dlg).addEventListener('submit', function (e) {
-    e.preventDefault();
-    var value = pass.value.trim();
-    var ok = el('ok', dlg);
-    if (!value) {
-      pass.setAttribute('aria-invalid', 'true');
-      passErr.textContent = 'Ошибка: введите пароль.';
-      pass.focus();
-      return;
-    }
-    ok.setAttribute('aria-disabled', 'true');
-    api('login', { password: value }, 20000).then(function (res) {
-      ok.setAttribute('aria-disabled', 'false');
-      if (res.ok && res.data.ok) {
-        authed = true;
-        if (res.data.token) setToken(res.data.token);
-        lastPublished = res.data.published || lastPublished;
-        btnOut.hidden = false; btnZip.hidden = false; btnRoll.hidden = false;
-        var next = afterLogin;
-        afterLogin = null;
-        authHandled = true;
-        cleanup();
-        dlg.close();
-        if (next) next();
-        return;
-      }
-      /* Ошибка одного поля: текст рядом с полем и фокус туда же.
-         В живую область дублировать нельзя — прозвучит дважды. */
-      pass.setAttribute('aria-invalid', 'true');
-      passErr.textContent = 'Ошибка: ' + ((res.data && res.data.error) || 'пароль не подошёл.');
-      pass.focus();
-      pass.select();
-    }).catch(function () {
-      ok.setAttribute('aria-disabled', 'false');
-      pass.setAttribute('aria-invalid', 'true');
-      passErr.textContent = 'Ошибка: нет связи с сайтом. Правки на месте, попробуйте ещё раз.';
-      pass.focus();
+    admin.askConfirm({
+      title: 'Сохранить правки на сайт?',
+      text: 'Каталог и тексты на сайте заменятся этой версией. Прежнюю можно будет вернуть ' +
+            'кнопкой «Вернуть предыдущую версию».',
+      ok: 'Сохранить на сайт',
+      cancel: 'Не сохранять',
+      onOk: publish
     });
   });
 
-  pass.addEventListener('input', function () {
-    pass.removeAttribute('aria-invalid');
-    passErr.textContent = '';
+  if (btnRoll) btnRoll.addEventListener('click', function () {
+    if (busy) { say('Идёт сохранение, подождите.'); return; }
+    clearError();
+    admin.askConfirm({
+      title: 'Вернуть предыдущую версию?',
+      text: 'Сайт вернётся к каталогу и текстам, которые были до последнего сохранения. ' +
+            'Несохранённые правки в этом браузере пропадут.',
+      ok: 'Вернуть версию',
+      cancel: 'Не возвращать',
+      onOk: rollback
+    });
   });
 
-  dlg.addEventListener('close', function () {
-    if (authHandled) { authHandled = false; return; }
-    afterLogin = null;
-    cleanup();
-    focusRing(btnSave);
+  /* -------------------------------------------------------------- старт */
+
+  applyMode();
+  render();
+  loadLastSaved();
+
+  /* Сохранили, а потом перезагрузили страницу — досматриваем, дошло ли. */
+  var st0 = MaebDraft.status();
+  if (!manual && st0.kind === 'published') startPolling(st0.draft);
+
+  /* Вход в админку случается уже после старта модуля: экран входа
+     расшифровывает ключ и сообщает об этом событием. */
+  document.addEventListener('maeb:unlocked', function () {
+    try { token = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { token = ''; }
+    manual = token ? null : 'nokey';
+    applyMode();
+    render();
+    loadLastSaved();
+    var st = MaebDraft.status();
+    if (!manual && st.kind === 'published' && !poll) startPolling(st.draft);
   });
 
-  /* ---------------------------------------------- старт ---------------- */
-
-  api('state', null, 15000).then(function (res) {
-    if (!(res.data && res.data.ok)) throw new Error('нет api.php');
-    authed = !!res.data.auth;
-    lastPublished = res.data.published || lastPublished;
-    btnOut.hidden = !authed; btnZip.hidden = !authed; btnRoll.hidden = !authed;
-    try { published = hashOf(snapshot()); } catch (e) { published = null; }
-    refresh();
-    /* Правки в админке модуль не отслеживает — просто пересчитываем состояние. */
-    setInterval(refresh, 2000);
-  }).catch(function () {
-    /* Сервис публикации недоступен — переходим в ручной режим: «Сохранить
-       на сайт» скачивает файл для отправки разработчику, «Скачать сайт
-       целиком» отдаёт архив с GitHub. Возврат версии без сервиса невозможен. */
-    manual = true;
-    if (btnSave) btnSave.hidden = false;
-    if (btnZip) btnZip.hidden = !cfg.zipUrl;
-    if (btnRoll) btnRoll.hidden = true;
-    if (btnOut) btnOut.hidden = true;
-    if (stateLine) {
-      stateLine.removeAttribute('data-dirty');
-      stateLine.textContent = 'Правки сохраняются в этом браузере. «Сохранить на сайт» скачает файл каталога — '
-        + 'отправьте его разработчику, и правки появятся на сайте.';
-    }
-  });
+  /* Правки в админке модуль не отслеживает — просто пересчитываем строку. */
+  setInterval(function () { if (!busy) render(); }, 2000);
 })();
